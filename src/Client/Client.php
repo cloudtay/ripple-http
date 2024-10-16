@@ -44,7 +44,6 @@ use Psc\Core\Socket\SocketStream;
 use Psc\Core\Socket\Tunnel\Http;
 use Psc\Core\Socket\Tunnel\Socks5;
 use Psc\Core\Stream\Exception\ConnectionException;
-use Psc\Utils\Output;
 use Psr\Http\Message\RequestInterface;
 use Throwable;
 
@@ -240,11 +239,9 @@ class Client
                         }
                         $resolve($response);
                     }
-                } catch (ConnectionException $exception) {
+                } catch (Throwable $exception) {
                     $socketStream->close();
                     $reject($exception);
-                } catch (Throwable $exception) {
-                    Output::warning($exception->getMessage());
                 }
             });
         })->await();
