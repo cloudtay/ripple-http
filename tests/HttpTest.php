@@ -6,8 +6,8 @@ use Co\Plugin;
 use GuzzleHttp\Exception\GuzzleException;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use Psc\Core\Coroutine\Promise;
-use Psc\Core\Http\Server\Request;
+use Ripple\Coroutine\Promise;
+use Ripple\App\Http\Server\Request;
 use Psc\Utils\Output;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 

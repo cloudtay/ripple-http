@@ -32,13 +32,13 @@
  * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
  */
 
-namespace Psc\Core\Http\Client;
+namespace Ripple\App\Http\Client;
 
 use Co\IO;
-use Psc\Core\Socket\SocketStream;
-use Psc\Core\Socket\Tunnel\Http;
-use Psc\Core\Socket\Tunnel\Socks5;
-use Psc\Core\Stream\Exception\ConnectionException;
+use Ripple\Socket\SocketStream;
+use Ripple\Socket\Tunnel\Http;
+use Ripple\Socket\Tunnel\Socks5;
+use Ripple\Stream\Exception\ConnectionException;
 use Throwable;
 
 use function array_pop;

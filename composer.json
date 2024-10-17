@@ -10,7 +10,7 @@
   ],
   "autoload": {
     "psr-4": {
-      "Psc\\Core\\Http\\": "src/"
+      "Ripple\\App\\Http\\": "src/"
     }
   },
   "require": {
@@ -21,7 +21,7 @@
     "ext-curl": "*",
     "ext-parallel": "*",
     "ext-zlib": "*",
-    "cloudtay/ripple": "dev-main",
+    "cloudtay/ripple": "0.8.x-dev",
     "phpunit/phpunit": "*",
     "friendsofphp/php-cs-fixer": "*"
   },

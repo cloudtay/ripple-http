@@ -32,12 +32,12 @@
  * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
  */
 
-namespace Psc\Core\Http;
+namespace Ripple\App\Http;
 
-use Psc\Core\Http\Client\Client;
-use Psc\Core\Http\Server\Server;
-use Psc\Core\LibraryAbstract;
-use Psc\Core\Stream\Exception\ConnectionException;
+use Ripple\App\Http\Client\Client;
+use Ripple\App\Http\Server\Server;
+use Ripple\LibraryAbstract;
+use Ripple\Stream\Exception\ConnectionException;
 use Psc\Plugins\Guzzle\Guzzle;
 use Psc\Utils\Output;
 

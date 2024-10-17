@@ -32,11 +32,11 @@
  * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
  */
 
-namespace Psc\Core\Http\Client;
+namespace Ripple\App\Http\Client;
 
 use GuzzleHttp\Psr7\Response;
-use Psc\Core\Socket\SocketStream;
-use Psc\Core\Stream\Exception\RuntimeException;
+use Ripple\Socket\SocketStream;
+use Ripple\Stream\Exception\RuntimeException;
 use Psr\Http\Message\ResponseInterface;
 
 use function count;

@@ -32,15 +32,15 @@
  * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
  */
 
-namespace Psc\Core\Http\Server;
+namespace Ripple\App\Http\Server;
 
 use Closure;
 use Co\IO;
 use InvalidArgumentException;
-use Psc\Core\Http\Enum\Status;
-use Psc\Core\Http\Server\Exception\FormatException;
-use Psc\Core\Socket\SocketStream;
-use Psc\Core\Stream\Exception\ConnectionException;
+use Ripple\App\Http\Enum\Status;
+use Ripple\App\Http\Server\Exception\FormatException;
+use Ripple\Socket\SocketStream;
+use Ripple\Stream\Exception\ConnectionException;
 use Psc\Utils\Output;
 use Throwable;
 
