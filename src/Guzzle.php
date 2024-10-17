@@ -32,57 +32,71 @@
  * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
  */
 
-namespace Psc\Core\Http;
+namespace Ripple\Http;
 
-use Psc\Core\Http\Client\Client;
-use Psc\Core\Http\Server\Server;
-use Psc\Core\LibraryAbstract;
-use Psc\Core\Stream\Exception\ConnectionException;
-use Psc\Plugins\Guzzle\Guzzle;
-use Psc\Utils\Output;
+use GuzzleHttp\Client;
+use Ripple\Http\Guzzle\RippleHandler;
+
+use function array_merge;
+
+use const PHP_SAPI;
 
 /**
  * @Author cclilshy
- * @Date   2024/8/16 09:35
+ * @Date   2024/8/16 09:37
  */
-class Http extends LibraryAbstract
+class Guzzle
 {
-    /**
-     * @var LibraryAbstract
-     */
-    protected static LibraryAbstract $instance;
+    /*** @var Guzzle */
+    protected static Guzzle $instance;
+
+    /*** @var RippleHandler */
+    protected RippleHandler $rippleHandler;
 
     /**
-     * @return Guzzle
+     *
      */
-    public function Guzzle(): Guzzle
+    protected function __construct()
     {
-        return Guzzle::getInstance();
+        $config              = [];
+        $httpClient          = new \Ripple\Http\Client(array_merge(['pool' => PHP_SAPI === 'cli'], $config));
+        $this->rippleHandler = new RippleHandler($httpClient);
+    }
+
+    /*** @return Guzzle */
+    public static function getInstance(): Guzzle
+    {
+        if (!isset(self::$instance)) {
+            self::$instance = new self();
+        }
+        return self::$instance;
     }
 
     /**
-     * @param string $address
-     * @param mixed  $context
-     *
-     * @return Server|false
+     * @Author cclilshy
+     * @Date   2024/8/31 14:28
+     * @return RippleHandler
      */
-    public function server(string $address, mixed $context = null): Server|false
+    public function getHandler(): RippleHandler
     {
-        try {
-            return new Server($address, $context);
-        } catch (ConnectionException $e) {
-            Output::error($e->getMessage());
-            return false;
-        }
+        return $this->rippleHandler;
+    }
+
+    /**
+     * @return \Ripple\Http\Client
+     */
+    public function getHttpClient(): \Ripple\Http\Client
+    {
+        return $this->getHandler()->getHttpClient();
     }
 
     /**
      * @param array $config
      *
-     * @return Client
+     * @return \GuzzleHttp\Client
      */
-    public function client(array $config): Client
+    public static function newClient(array $config = []): Client
     {
-        return new Client($config);
+        return new Client(array_merge(['handler' => self::getInstance()->getHandler()], $config));
     }
 }

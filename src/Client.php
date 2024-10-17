@@ -32,24 +32,23 @@
  * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
  */
 
-namespace Psc\Core\Http\Client;
+namespace Ripple\Http;
 
-use Closure;
 use Co\IO;
 use GuzzleHttp\Psr7\MultipartStream;
 use GuzzleHttp\Psr7\Response;
-use InvalidArgumentException;
-use Psc\Core\Coroutine\Promise;
-use Psc\Core\Socket\SocketStream;
-use Psc\Core\Socket\Tunnel\Http;
-use Psc\Core\Socket\Tunnel\Socks5;
-use Psc\Core\Stream\Exception\ConnectionException;
 use Psr\Http\Message\RequestInterface;
+use Ripple\Coroutine;
+use Ripple\Http\Client\Connection;
+use Ripple\Http\Client\ConnectionPool;
+use Ripple\Socket\Tunnel\Http;
+use Ripple\Socket\Tunnel\Socks5;
+use Ripple\Stream\Exception\ConnectionException;
 use Throwable;
 
 use function Co\cancel;
 use function Co\delay;
-use function Co\repeat;
+use function Co\getSuspension;
 use function fclose;
 use function fopen;
 use function getenv;
@@ -84,167 +83,165 @@ class Client
      * @param array            $option
      *
      * @return Response
-     * @throws Throwable
+     * @throws \Ripple\Stream\Exception\ConnectionException
+     * @throws \Ripple\Stream\Exception\RuntimeException
      */
     public function request(RequestInterface $request, array $option = []): Response
     {
-        return \Co\promise(function (Closure $resolve, Closure $reject, Promise $promise) use ($request, $option) {
-            $uri    = $request->getUri();
-            $method = $request->getMethod();
-            $scheme = $uri->getScheme();
-            $host   = $uri->getHost();
+        $uri    = $request->getUri();
+        $method = $request->getMethod();
+        $scheme = $uri->getScheme();
+        $host   = $uri->getHost();
 
-            if (!$port = $uri->getPort()) {
-                $port = $scheme === 'https' ? 443 : 80;
+        if (!$port = $uri->getPort()) {
+            $port = $scheme === 'https' ? 443 : 80;
+        }
+
+        if (!$path = $uri->getPath()) {
+            $path = '/';
+        }
+
+        if ($query = $uri->getQuery()) {
+            $query = "?{$query}";
+        } else {
+            $query = '';
+        }
+
+        if (!isset($option['proxy'])) {
+            if ($scheme === 'http' && $httpProxy = getenv('http_proxy')) {
+                $option['proxy'] = $httpProxy;
+            } elseif ($scheme === 'https' && $httpsProxy = getenv('https_proxy')) {
+                $option['proxy'] = $httpsProxy;
+            }
+        }
+
+        $connection = $this->pullConnection(
+            $host,
+            $port,
+            $scheme === 'https',
+            $option['timeout'] ?? 0,
+            $option['proxy'] ?? null
+        );
+
+        $write = fn (string|false $content) => $connection->stream->write($content);
+        $tick  = fn (string|false $content) => $connection->tick($content);
+
+        if ($captureWrite = $option['capture_write'] ?? null) {
+            $write = fn (string|false $content) => $captureWrite($content, $write);
+        }
+
+        if ($captureRead = $option['capture_read'] ?? null) {
+            $tick = fn (string|false $content) => $captureRead($content, $tick);
+        }
+
+        $suspension = getSuspension();
+        $header     = "{$method} {$path}{$query} HTTP/1.1\r\n";
+        foreach ($request->getHeaders() as $name => $values) {
+            $header .= "{$name}: " . implode(', ', $values) . "\r\n";
+        }
+
+        $write($header);
+        if ($bodyStream = $request->getBody()) {
+            if (!$request->getHeader('Content-Length')) {
+                $size = $bodyStream->getSize();
+                $size > 0 && $write("Content-Length: {$bodyStream->getSize()}\r\n");
             }
 
-            if (!$path = $uri->getPath()) {
-                $path = '/';
-            }
-
-            if ($query = $uri->getQuery()) {
-                $query = "?{$query}";
-            } else {
-                $query = '';
-            }
-
-            if (!isset($option['proxy'])) {
-                if ($scheme === 'http' && $httpProxy = getenv('http_proxy')) {
-                    $option['proxy'] = $httpProxy;
-                } elseif ($scheme === 'https' && $httpsProxy = getenv('https_proxy')) {
-                    $option['proxy'] = $httpsProxy;
+            if ($bodyStream->getMetadata('uri') === 'php://temp') {
+                $write("\r\n");
+                if ($bodyContent = $bodyStream->getContents()) {
+                    $write($bodyContent);
                 }
-            }
-
-            $connection = $this->pullConnection(
-                $host,
-                $port,
-                $scheme === 'https',
-                $option['timeout'] ?? 0,
-                $option['proxy'] ?? null
-            );
-
-            $writeHandler = fn (string|false $content) => $connection->stream->write($content);
-            $tickHandler  = fn (string|false $content) => $connection->tick($content);
-
-            if ($captureWrite = $option['capture_write'] ?? null) {
-                $writeHandler = fn (string|false $content) => $captureWrite($content, $writeHandler);
-            }
-
-            if ($captureRead = $option['capture_read'] ?? null) {
-                $tickHandler = fn (string|false $content) => $captureRead($content, $tickHandler);
-            }
-
-            $header = "{$method} {$path}{$query} HTTP/1.1\r\n";
-            foreach ($request->getHeaders() as $name => $values) {
-                $header .= "{$name}: " . implode(', ', $values) . "\r\n";
-            }
-
-            $writeHandler($header);
-            if ($bodyStream = $request->getBody()) {
-                if (!$request->getHeader('Content-Length')) {
-                    $size = $bodyStream->getSize();
-                    $size > 0 && $writeHandler("Content-Length: {$bodyStream->getSize()}\r\n");
+            } elseif ($bodyStream instanceof MultipartStream) {
+                if (!$request->getHeader('Content-Type')) {
+                    $write("Content-Type: multipart/form-data; boundary={$bodyStream->getBoundary()}\r\n");
                 }
-
-                if ($bodyStream->getMetadata('uri') === 'php://temp') {
-                    $writeHandler("\r\n");
-                    if ($bodyContent = $bodyStream->getContents()) {
-                        $writeHandler($bodyContent);
-                    }
-                } elseif ($bodyStream instanceof MultipartStream) {
-                    if (!$request->getHeader('Content-Type')) {
-                        $writeHandler("Content-Type: multipart/form-data; boundary={$bodyStream->getBoundary()}\r\n");
-                    }
-                    $writeHandler("\r\n");
-                    repeat(static function (Closure $cancel) use ($connection, $bodyStream, $resolve, $reject, $writeHandler) {
-                        try {
-                            $content = '';
-                            while ($buffer = $bodyStream->read(8192)) {
-                                $content .= $buffer;
-                            }
-
-                            if ($content) {
-                                $writeHandler($content);
-                            } else {
-                                $cancel();
-                                $bodyStream->close();
-                            }
-                        } catch (Throwable) {
-                            $cancel();
-                            $bodyStream->close();
-                            $reject(new InvalidArgumentException('Invalid body stream'));
-                        }
-                    }, 0.1);
-                } else {
-                    throw new InvalidArgumentException('Invalid body stream');
-                }
-            } else {
-                $writeHandler("\r\n");
-            }
-
-            if ($timeout = $option['timeout'] ?? null) {
-                $delayEventId = delay(static function () use ($connection, $reject) {
-                    $connection->stream->close();
-                    $reject(new ConnectionException('Request timeout', ConnectionException::CONNECTION_TIMEOUT));
-                }, $timeout);
-
-                $promise->finally(static function () use ($delayEventId) {
-                    cancel($delayEventId);
-                });
-            }
-
-            if ($sink = $option['sink'] ?? null) {
-                $connection->setOutput($sinkFile = fopen($sink, 'wb'));
-                $promise->finally(static function () use ($sinkFile) {
-                    if (is_resource($sinkFile)) {
-                        fclose($sinkFile);
-                    }
-                });
-            }
-
-            /*** Parse response process*/
-            $connection->stream->onReadable(function (SocketStream $socketStream, Closure $cancel) use (
-                $host,
-                $port,
-                $connection,
-                $scheme,
-                $resolve,
-                $reject,
-                $tickHandler
-            ) {
+                $write("\r\n");
                 try {
-                    $content = $socketStream->readContinuously(8192);
-
-                    if ($content === '') {
-                        if (!$socketStream->eof()) {
-                            return;
-                        }
-                        $response = $tickHandler(false);
-                    } else {
-                        $response = $tickHandler($content);
+                    while (!$bodyStream->eof()) {
+                        $write($bodyStream->read(8192));
                     }
-
-                    if ($response) {
-                        $k = implode(', ', $response->getHeader('Connection'));
-                        if (str_contains(strtolower($k), 'keep-alive') && $this->pool) {
-                            /*** Push into connection pool*/
-                            $this->pushConnection(
-                                $connection,
-                                ConnectionPool::generateConnectionKey($host, $port)
-                            );
-                            $cancel();
-                        } else {
-                            $socketStream->close();
-                        }
-                        $resolve($response);
-                    }
-                } catch (Throwable $exception) {
-                    $socketStream->close();
-                    $reject($exception);
+                } catch (Throwable) {
+                    $bodyStream->close();
+                    $connection->stream->close();
+                    throw new ConnectionException('Invalid body stream');
                 }
-            });
-        })->await();
+            } else {
+                throw new ConnectionException('Invalid body stream');
+            }
+        } else {
+            $write("\r\n");
+        }
+
+        /*** Parse response process*/
+        if ($timeout = $option['timeout'] ?? null) {
+            $timeoutOID = delay(static function () use ($connection, $suspension) {
+                Coroutine::throw(
+                    $suspension,
+                    new ConnectionException('Request timeout', ConnectionException::CONNECTION_TIMEOUT)
+                );
+            }, $timeout);
+        }
+
+        if ($sink = $option['sink'] ?? null) {
+            $connection->setOutput(fopen($sink, 'wb'));
+        }
+
+        while (1) {
+            try {
+                $connection->stream->waitForReadable();
+            } catch (Throwable $e) {
+                if (isset($timeoutOID)) {
+                    cancel($timeoutOID);
+                }
+
+                if ($sink && is_resource($sink)) {
+                    fclose($sink);
+                }
+
+                $connection->stream->close();
+                throw new ConnectionException(
+                    'Connection closed by peer',
+                    ConnectionException::CONNECTION_CLOSED,
+                    null,
+                    $connection->stream,
+                    true
+                );
+            }
+
+            $content = $connection->stream->readContinuously(8192);
+            if ($content === '') {
+                if (!$connection->stream->eof()) {
+                    continue;
+                }
+                $response = $tick(false);
+            } else {
+                $response = $tick($content);
+            }
+
+            if ($response) {
+                $k = implode(', ', $response->getHeader('Connection'));
+                if (str_contains(strtolower($k), 'keep-alive') && $this->pool) {
+                    /*** Push into connection pool*/
+                    $this->pushConnection(
+                        $connection,
+                        ConnectionPool::generateConnectionKey($host, $port)
+                    );
+                    $connection->stream->cancelReadable();
+                } else {
+                    $connection->stream->close();
+                }
+
+                if (isset($timeoutOID)) {
+                    cancel($timeoutOID);
+                }
+
+                if ($sink && is_resource($sink)) {
+                    fclose($sink);
+                }
+                return $response;
+            }
+        }
     }
 
     /**
@@ -256,10 +253,12 @@ class Client
      *
      * @return Connection
      * @throws ConnectionException
-     * @throws Throwable
      */
     private function pullConnection(string $host, int $port, bool $ssl, int $timeout = 0, string|null $tunnel = null): Connection
     {
+        if ($tunnel && in_array($host, ['127.0.0.1', 'localhost', '::1'], true)) {
+            $tunnel = null;
+        }
         if ($this->pool) {
             $connection = $this->connectionPool->pullConnection($host, $port, $ssl, $timeout, $tunnel);
         } else {

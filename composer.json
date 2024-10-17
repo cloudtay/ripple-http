@@ -1,6 +1,5 @@
 {
   "name": "cloudtay/ripple-http",
-  "version": "v0.1",
   "license": "MIT",
   "authors": [
     {
@@ -10,10 +9,13 @@
   ],
   "autoload": {
     "psr-4": {
-      "Psc\\Core\\Http\\": "src/"
+      "Ripple\\Http\\": "src/"
     }
   },
   "require": {
+    "ext-sockets": "*",
+    "guzzlehttp/guzzle": "*",
+    "symfony/http-foundation": "*"
   },
   "require-dev": {
     "ext-posix": "*",
@@ -21,7 +23,7 @@
     "ext-curl": "*",
     "ext-parallel": "*",
     "ext-zlib": "*",
-    "cloudtay/ripple": "dev-main",
+    "cloudtay/ripple": "^1.0.0-alpha",
     "phpunit/phpunit": "*",
     "friendsofphp/php-cs-fixer": "*"
   },

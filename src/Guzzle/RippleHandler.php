@@ -32,12 +32,51 @@
  * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
  */
 
-namespace Ripple\Http\Server\Exception;
+namespace Ripple\Http\Guzzle;
 
-/**
- * @Author cclilshy
- * @Date   2024/8/16 09:35
- */
-class Exception extends \Exception
+use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Exception\TransferException;
+use GuzzleHttp\Promise\Promise;
+use GuzzleHttp\Promise\PromiseInterface;
+use Psr\Http\Message\RequestInterface;
+use Ripple\Http\Client;
+use Throwable;
+
+class RippleHandler
 {
+    public function __construct(private Client $httpClient)
+    {
+    }
+
+    /**
+     * @param RequestInterface $request
+     * @param array            $options
+     *
+     * @return PromiseInterface
+     */
+    public function __invoke(RequestInterface $request, array $options): PromiseInterface
+    {
+        $promise = new Promise(function () use ($request, $options, &$promise) {
+            try {
+                $response = $this->httpClient->request($request, $options);
+                $promise->resolve($response);
+            } catch (GuzzleException $exception) {
+                $promise->reject($exception);
+            } catch (Throwable $exception) {
+                $promise->reject(new TransferException($exception->getMessage()));
+            }
+        });
+
+        return $promise;
+    }
+
+    /**
+     * @Author cclilshy
+     * @Date   2024/8/31 14:31
+     * @return Client
+     */
+    public function getHttpClient(): Client
+    {
+        return $this->httpClient;
+    }
 }

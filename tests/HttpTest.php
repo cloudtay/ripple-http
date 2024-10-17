@@ -1,14 +1,13 @@
 <?php declare(strict_types=1);
 
 
-use Co\Net;
-use Co\Plugin;
 use GuzzleHttp\Exception\GuzzleException;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use Psc\Core\Coroutine\Promise;
-use Psc\Core\Http\Server\Request;
-use Psc\Utils\Output;
+use Ripple\Http\Guzzle;
+use Ripple\Http\Server\Request;
+use Ripple\Promise;
+use Ripple\Utils\Output;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 use function Co\async;
@@ -30,7 +29,7 @@ class HttpTest extends TestCase
             ],
         ]);
 
-        $server = Net::Http()->server('http://127.0.0.1:8008', $context);
+        $server = new Ripple\Http\Server('http://127.0.0.1:8008', $context);
         $server->onRequest(function (Request $request) {
             $url    = \trim($request->SERVER['REQUEST_URI']);
             $method = \strtoupper($request->SERVER['REQUEST_METHOD']);
@@ -107,7 +106,10 @@ class HttpTest extends TestCase
             }
         }
 
-        Plugin::Guzzle()->getHttpClient()->getConnectionPool()->clearConnectionPool();
+        Guzzle::getInstance()
+            ->getHttpClient()
+            ->getConnectionPool()
+            ->clearConnectionPool();
         \gc_collect_cycles();
 
         if ($baseMemory !== \memory_get_usage()) {
@@ -125,7 +127,7 @@ class HttpTest extends TestCase
     private function httpGet(): void
     {
         $hash     = \md5(\uniqid());
-        $client   = Plugin::Guzzle()->newClient();
+        $client   = Guzzle::newClient();
         $response = $client->get('http://127.0.0.1:8008/', [
             'query' => [
                 'query' => $hash,
@@ -143,7 +145,7 @@ class HttpTest extends TestCase
     private function httpPost(): void
     {
         $hash     = \md5(\uniqid());
-        $client   = Plugin::Guzzle()->newClient();
+        $client   = Guzzle::newClient();
         $response = $client->post('http://127.0.0.1:8008/', [
             'json'    => [
                 'query' => $hash,
@@ -160,7 +162,7 @@ class HttpTest extends TestCase
      */
     private function httpFile(): void
     {
-        $client = Plugin::Guzzle()->newClient();
+        $client = Guzzle::newClient();
         $path   = \tempnam(\sys_get_temp_dir(), 'test');
         \file_put_contents($path, \str_repeat('a', 81920));
         $hash = \md5_file($path);
@@ -205,17 +207,22 @@ class HttpTest extends TestCase
             'https://business.oceanengine.com/login',
             'https://www.laruence.com/',
             'https://www.php.net/',
+            'https://www.abc.net/',
+            'https://www.491e5d73fbeb64e8e7d66b25cb3d1823.net/',
+            'http://www.491e5d73fbeb64e8e7d66b25cb3d1823.net/',
         ];
-
 
         $list = [];
         foreach ($urls as $url) {
             $list[] = async(function () use ($url) {
                 try {
-                    return [$url, Plugin::Guzzle()->newClient()->get($url, ['timeout' => 10])];
+                    return [$url, Guzzle::newClient()->get($url, ['timeout' => 10])];
                 } catch (Throwable $exception) {
                     return [$url, $exception];
                 }
+            })->except(function () {
+                \var_dump(1);
+                die;
             });
         }
 

@@ -32,16 +32,18 @@
  * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
  */
 
-namespace Psc\Core\Http\Server;
+namespace Ripple\Http;
 
 use Closure;
 use Co\IO;
 use InvalidArgumentException;
-use Psc\Core\Http\Enum\Status;
-use Psc\Core\Http\Server\Exception\FormatException;
-use Psc\Core\Socket\SocketStream;
-use Psc\Core\Stream\Exception\ConnectionException;
-use Psc\Utils\Output;
+use Ripple\Http\Enum\Status;
+use Ripple\Http\Server\Connection;
+use Ripple\Http\Server\Exception\FormatException;
+use Ripple\Http\Server\Request;
+use Ripple\Socket\SocketStream;
+use Ripple\Stream\Exception\ConnectionException;
+use Ripple\Utils\Output;
 use Throwable;
 
 use function call_user_func_array;
@@ -113,9 +115,7 @@ class Server
     public function listen(): void
     {
         $this->server->onReadable(function (SocketStream $stream) {
-            try {
-                $client = $stream->accept();
-            } catch (Throwable) {
+            if (!$client = $stream->accept()) {
                 return;
             }
 

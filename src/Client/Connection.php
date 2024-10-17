@@ -32,11 +32,11 @@
  * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
  */
 
-namespace Psc\Core\Http\Client;
+namespace Ripple\Http\Client;
 
 use GuzzleHttp\Psr7\Response;
-use Psc\Core\Socket\SocketStream;
-use Psc\Core\Stream\Exception\RuntimeException;
+use Ripple\Socket\SocketStream;
+use Ripple\Stream\Exception\RuntimeException;
 use Psr\Http\Message\ResponseInterface;
 
 use function count;
@@ -141,7 +141,9 @@ class Connection
     public function tick(string|false $content): ResponseInterface|null
     {
         if ($content === false) {
-            if (isset($this->headers['CONTENT-LENGTH'])) {
+            if (!$this->headers) {
+                throw new RuntimeException('Response header is required');
+            } elseif (isset($this->headers['CONTENT-LENGTH'])) {
                 throw new RuntimeException('Response content length is required');
             } elseif ($this->chunk) {
                 throw new RuntimeException('Response chunked is required');

@@ -32,14 +32,14 @@
  * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
  */
 
-namespace Psc\Core\Http\Server;
+namespace Ripple\Http\Server;
 
 use Closure;
-use Psc\Core\Http\Server\Exception\FormatException;
-use Psc\Core\Http\Server\Upload\MultipartHandler;
-use Psc\Core\Socket\SocketStream;
-use Psc\Core\Stream\Exception\RuntimeException;
-use Psc\Utils\Output;
+use Ripple\Http\Server\Exception\FormatException;
+use Ripple\Http\Server\Upload\MultipartHandler;
+use Ripple\Socket\SocketStream;
+use Ripple\Stream\Exception\RuntimeException;
+use Ripple\Utils\Output;
 use Throwable;
 
 use function array_merge;
@@ -143,7 +143,13 @@ class Connection
         });
 
         $this->stream->onReadable(function (SocketStream $stream) use ($builder) {
-            $content = $stream->read(8192);
+            try {
+                $content = $stream->read(8192);
+            } catch (Throwable) {
+                $stream->close();
+                return;
+            }
+
             if ($content === '') {
                 if ($stream->eof()) {
                     $stream->close();

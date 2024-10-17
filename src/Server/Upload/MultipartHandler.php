@@ -32,9 +32,9 @@
  * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
  */
 
-namespace Psc\Core\Http\Server\Upload;
+namespace Ripple\Http\Server\Upload;
 
-use Psc\Core\Http\Server\Exception\FormatException;
+use Ripple\Http\Server\Exception\FormatException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 use function array_pop;

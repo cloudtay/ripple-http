@@ -32,13 +32,13 @@
  * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
  */
 
-namespace Psc\Core\Http\Client;
+namespace Ripple\Http\Client;
 
 use Co\IO;
-use Psc\Core\Socket\SocketStream;
-use Psc\Core\Socket\Tunnel\Http;
-use Psc\Core\Socket\Tunnel\Socks5;
-use Psc\Core\Stream\Exception\ConnectionException;
+use Ripple\Socket\SocketStream;
+use Ripple\Socket\Tunnel\Http;
+use Ripple\Socket\Tunnel\Socks5;
+use Ripple\Stream\Exception\ConnectionException;
 use Throwable;
 
 use function array_pop;
@@ -120,7 +120,6 @@ class ConnectionPool
      *
      * @return Connection
      * @throws ConnectionException
-     * @throws Throwable
      */
     public function pullConnection(
         string      $host,
@@ -173,7 +172,6 @@ class ConnectionPool
      *
      * @return Connection
      * @throws ConnectionException
-     * @throws Throwable
      */
     private function createConnection(string $host, int $port, bool $ssl, int|float $timeout, string|null $proxy = null): Connection
     {
@@ -206,20 +204,14 @@ class ConnectionPool
      *
      * @return SocketStream
      * @throws ConnectionException
-     * @throws Throwable
      */
     private function createProxySocketStream(array $parse, array $payload): SocketStream
     {
-        switch ($parse['scheme']) {
-            case 'socks':
-            case 'socks5':
-                return Socks5::connect("tcp://{$parse['host']}:{$parse['port']}", $payload)->getSocketStream();
-            case 'http':
-            case 'https':
-                return Http::connect("tcp://{$parse['host']}:{$parse['port']}", $payload)->getSocketStream();
-            default:
-                throw new ConnectionException('Unsupported proxy protocol', ConnectionException::CONNECTION_ERROR);
-        }
+        return match ($parse['scheme']) {
+            'socks', 'socks5' => Socks5::connect("tcp://{$parse['host']}:{$parse['port']}", $payload)->getSocketStream(),
+            'http', 'https'   => Http::connect("tcp://{$parse['host']}:{$parse['port']}", $payload)->getSocketStream(),
+            default           => throw new ConnectionException('Unsupported proxy protocol', ConnectionException::CONNECTION_ERROR),
+        };
     }
 
     /**
