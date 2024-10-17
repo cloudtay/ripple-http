@@ -1,37 +1,18 @@
 <?php declare(strict_types=1);
 
-namespace Tests;
 
 use Co\Net;
 use Co\Plugin;
 use GuzzleHttp\Exception\GuzzleException;
-use GuzzleHttp\Psr7\Response;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Psc\Core\Coroutine\Promise;
 use Psc\Core\Http\Server\Request;
 use Psc\Utils\Output;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
-use Throwable;
 
 use function Co\async;
 use function Co\cancelAll;
-use function file_put_contents;
-use function fopen;
-use function gc_collect_cycles;
-use function md5;
-use function md5_file;
-use function memory_get_usage;
-use function str_repeat;
-use function stream_context_create;
-use function strtoupper;
-use function sys_get_temp_dir;
-use function tempnam;
-use function trim;
-use function uniqid;
-use function is_array;
-
-use const PHP_EOL;
 
 class HttpTest extends TestCase
 {
@@ -42,7 +23,7 @@ class HttpTest extends TestCase
     #[Test]
     public function test_httpServer(): void
     {
-        $context = stream_context_create([
+        $context = \stream_context_create([
             'socket' => [
                 'so_reuseport' => 1,
                 'so_reuseaddr' => 1,
@@ -51,15 +32,15 @@ class HttpTest extends TestCase
 
         $server = Net::Http()->server('http://127.0.0.1:8008', $context);
         $server->onRequest(function (Request $request) {
-            $url    = trim($request->SERVER['REQUEST_URI']);
-            $method = strtoupper($request->SERVER['REQUEST_METHOD']);
+            $url    = \trim($request->SERVER['REQUEST_URI']);
+            $method = \strtoupper($request->SERVER['REQUEST_METHOD']);
 
             if ($url === '/upload') {
                 /*** @var UploadedFile $file */
                 $file = $request->FILES['file'][0];
                 $hash = $request->POST['hash'] ?? '';
-                $this->assertEquals($hash, md5_file($file->getRealPath()));
-                $request->respond(fopen($file->getRealPath(), 'r'));
+                $this->assertEquals($hash, \md5_file($file->getRealPath()));
+                $request->respond(\fopen($file->getRealPath(), 'r'));
                 return;
             }
 
@@ -100,8 +81,8 @@ class HttpTest extends TestCase
             }
         }
 
-        gc_collect_cycles();
-        $baseMemory = memory_get_usage();
+        \gc_collect_cycles();
+        $baseMemory = \memory_get_usage();
 
         for ($i = 0; $i < 10; $i++) {
             try {
@@ -127,9 +108,9 @@ class HttpTest extends TestCase
         }
 
         Plugin::Guzzle()->getHttpClient()->getConnectionPool()->clearConnectionPool();
-        gc_collect_cycles();
+        \gc_collect_cycles();
 
-        if ($baseMemory !== memory_get_usage()) {
+        if ($baseMemory !== \memory_get_usage()) {
             echo "\nThere may be a memory leak.\n";
         }
 
@@ -143,7 +124,7 @@ class HttpTest extends TestCase
      */
     private function httpGet(): void
     {
-        $hash     = md5(uniqid());
+        $hash     = \md5(\uniqid());
         $client   = Plugin::Guzzle()->newClient();
         $response = $client->get('http://127.0.0.1:8008/', [
             'query' => [
@@ -161,7 +142,7 @@ class HttpTest extends TestCase
      */
     private function httpPost(): void
     {
-        $hash     = md5(uniqid());
+        $hash     = \md5(\uniqid());
         $client   = Plugin::Guzzle()->newClient();
         $response = $client->post('http://127.0.0.1:8008/', [
             'json'    => [
@@ -180,14 +161,14 @@ class HttpTest extends TestCase
     private function httpFile(): void
     {
         $client = Plugin::Guzzle()->newClient();
-        $path   = tempnam(sys_get_temp_dir(), 'test');
-        file_put_contents($path, str_repeat('a', 81920));
-        $hash = md5_file($path);
+        $path   = \tempnam(\sys_get_temp_dir(), 'test');
+        \file_put_contents($path, \str_repeat('a', 81920));
+        $hash = \md5_file($path);
         $client->post('http://127.0.0.1:8008/upload', [
             'multipart' => [
                 [
                     'name'     => 'file',
-                    'contents' => fopen($path, 'r'),
+                    'contents' => \fopen($path, 'r'),
                     'filename' => 'test.txt',
                 ],
                 [
@@ -198,7 +179,7 @@ class HttpTest extends TestCase
             'timeout'   => 10,
             'sink'      => $path . '.bak'
         ]);
-        $this->assertEquals($hash, md5_file($path . '.bak'));
+        $this->assertEquals($hash, \md5_file($path . '.bak'));
     }
 
     /**
@@ -228,22 +209,29 @@ class HttpTest extends TestCase
 
 
         $list = [];
-        foreach ($urls as $index => $url) {
-            $list[] = async(function () use ($url, $urls, $index) {
-                return [$index, Plugin::Guzzle()->newClient()->get($url, ['timeout' => 10])];
+        foreach ($urls as $url) {
+            $list[] = async(function () use ($url) {
+                try {
+                    return [$url, Plugin::Guzzle()->newClient()->get($url, ['timeout' => 10])];
+                } catch (Throwable $exception) {
+                    return [$url, $exception];
+                }
             });
         }
 
+        echo \PHP_EOL;
         foreach (Promise::futures($list) as $result) {
             if ($result instanceof Throwable) {
-                echo $result->getMessage(), PHP_EOL;
-            } elseif (is_array($result)) {
-                [$index, $response] = $result;
-                echo $index, ' ', $urls[$index], ' ';
-                echo $response->getStatusCode(), ' ', $response->getReasonPhrase(), PHP_EOL;
+                echo "{$result->getMessage()} \n";
+                continue;
+            }
+            [$url, $response] = $result;
+            if ($response instanceof Throwable) {
+                echo("{$url} {$response->getMessage()}\n");
             } else {
-                echo 'Unknown error', PHP_EOL;
+                echo("$url {$response->getStatusCode()}\n");
             }
         }
+        echo \PHP_EOL;
     }
 }
