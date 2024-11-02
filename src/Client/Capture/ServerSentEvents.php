@@ -32,206 +32,238 @@
  * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
  */
 
-namespace Ripple\Http\Client\Capture;
+namespace Ripple\Http\Client\Capturer;
 
 use Closure;
+use Exception;
 use GuzzleHttp\Psr7\Response;
-use Psr\Http\Message\ResponseInterface;
-use RuntimeException;
+use Iterator;
+use Ripple\Coroutine;
+use Ripple\Http\Client\Capturer;
+use Throwable;
 
 use function array_shift;
+use function Co\getSuspension;
 use function count;
-use function ctype_xdigit;
 use function explode;
-use function hexdec;
-use function str_contains;
-use function strlen;
+use function in_array;
 use function strpos;
-use function strtolower;
-use function strtoupper;
 use function substr;
 use function trim;
+use function var_dump;
 
 /**
  * @Author cclilshy
  * @Date   2024/9/4 12:21
  */
-class ServerSentEvents
+class ServerSentEvents extends Capturer
 {
+    /*** @var string */
+    private string $status = 'pending';
+
     /*** @var string */
     private string $buffer = '';
 
-    /*** @var array */
-    private array $headers = [];
-
-    /*** @var bool */
-    private bool $isSSE = false;
-
-    /*** @var Closure|null */
-    private Closure|null $onEvent = null;
-
-    /*** @var ResponseInterface|null */
-    private ResponseInterface|null $response = null;
-
-    /*** @var bool */
-    private bool $isChunked = false;
+    /**
+     * @return void
+     */
+    public function onInject(): void
+    {
+        $this->status = 'inject';
+    }
 
     /**
-     * @param Closure $handler
+     * @param Throwable|Exception $exception
      *
      * @return void
      */
-    public function onEvent(Closure $handler): void
+    public function onFail(Throwable|Exception $exception): void
     {
-        $this->onEvent = $handler;
-    }
+        $this->status = 'fail';
 
-    /**
-     * @return Closure
-     */
-    public function getWriteCapture(): Closure
-    {
-        return function (string $content, Closure $pass) {
-            return $pass($content);
-        };
-    }
-
-    /**
-     * @return Closure
-     */
-    public function getReadCapture(): Closure
-    {
-        return function (string|false $content, Closure $pass) {
-            if ($content === false) {
-                return $pass($content);
-            }
-
-            $this->buffer .= $content;
-            $this->processBuffer();
-            return $pass($content);
-        };
-    }
-
-    /**
-     * @return void
-     */
-    private function processBuffer(): void
-    {
-        if (!$this->isSSE) {
-            $headerEnd = strpos($this->buffer, "\r\n\r\n");
-            if ($headerEnd !== false) {
-                $header       = substr($this->buffer, 0, $headerEnd);
-                $this->buffer = substr($this->buffer, $headerEnd + 4);
-                $this->parseHeaders($header);
-
-                if (!$this->isSSE) {
-                    throw new RuntimeException('Response is not SSE');
-                }
-
-                $this->response  = new Response(200, $this->headers, '');
-                $this->isChunked = isset($this->headers['TRANSFER-ENCODING']) && strtolower($this->headers['TRANSFER-ENCODING']) === 'chunked';
-            }
+        foreach ($this->iterators as $iterator) {
+            $iterator->onError($exception);
         }
-        $this->isChunked ? $this->processChunkedBuffer() : $this->parseEvents();
     }
 
     /**
-     * @param string $header
+     * @param Throwable|Exception $exception
      *
      * @return void
      */
-    private function parseHeaders(string $header): void
+    public function onError(Throwable|Exception $exception): void
     {
-        $lines = explode("\r\n", $header);
+        $this->status = 'error';
 
-        $firstLine = array_shift($lines);
-        if (!$firstLine || count(explode(' ', $firstLine)) < 3) {
-            throw new RuntimeException('Header parsing failed');
+        foreach ($this->iterators as $iterator) {
+            $iterator->onError($exception);
         }
-
-        foreach ($lines as $line) {
-            if (str_contains($line, ': ')) {
-                [$key, $value] = explode(': ', $line, 2);
-                $this->headers[strtoupper($key)] = $value;
-            }
-        }
-
-        $this->isSSE = isset($this->headers['CONTENT-TYPE']) && str_contains($this->headers['CONTENT-TYPE'], 'text/event-stream');
     }
 
     /**
+     * @param \GuzzleHttp\Psr7\Response $response
+     *
      * @return void
      */
-    private function processChunkedBuffer(): void
+    public function onComplete(Response $response): void
     {
-        while (true) {
-            $sizeEnd = strpos($this->buffer, "\r\n");
-            if ($sizeEnd === false) {
-                return;
-            }
+        $this->status = 'complete';
 
-            $sizeHex = trim(substr($this->buffer, 0, $sizeEnd));
-            if (!ctype_xdigit($sizeHex)) {
-                $this->parseEvents();
-                return;
-            }
-
-            $size = hexdec($sizeHex);
-            if ($size === 0) {
-                $this->buffer = substr($this->buffer, $sizeEnd + 2);
-                break;
-            }
-
-            $chunkStart = $sizeEnd + 2;
-
-            if (strlen($this->buffer) < $chunkStart + $size + 2) {
-                return;
-            }
-
-            $chunkData    = substr($this->buffer, $chunkStart, $size);
-            $this->buffer = substr($this->buffer, $chunkStart + $size + 2);
-            $this->buffer .= $chunkData;
+        if ($this->onComplete instanceof Closure) {
+            ($this->onComplete)($response);
         }
 
-        $this->parseEvents();
+        foreach ($this->iterators as $iterator) {
+            $iterator->onEvent(null);
+        }
     }
 
-
     /**
+     * @param array $headers
+     *
      * @return void
      */
-    private function parseEvents(): void
+    public function processHeader(array $headers): void
     {
+    }
+
+    /**
+     * @param string $content
+     *
+     * @return void
+     */
+    public function processContent(string $content): void
+    {
+        $this->buffer .= $content;
         while (($eventEnd = strpos($this->buffer, "\n\n")) !== false) {
-            $eventData    = substr($this->buffer, 0, $eventEnd);
+            $eventString = substr($this->buffer, 0, $eventEnd);
             $this->buffer = substr($this->buffer, $eventEnd + 2);
 
-            $event = $this->parseEvent($eventData);
+            // Split the data by lines
+            $eventData = [];
+            $lines     = explode("\n", $eventString);
+            foreach ($lines as $line) {
+                $keyValue = explode(':', $line, 2);
+                if (count($keyValue) === 2) {
+                    $eventData[trim($keyValue[0])] = trim($keyValue[1]);
+                } else {
+                    $eventData[] = $line;
+                }
+            }
 
-            if (isset($this->onEvent)) {
-                ($this->onEvent)($event);
+            if ($this->onEvent instanceof Closure) {
+                ($this->onEvent)($eventData);
+            }
+
+            foreach ($this->iterators as $iterator) {
+                $iterator->onEvent($eventData);
             }
         }
     }
+
+    /*** @return string */
+    public function getStatus(): string
+    {
+        return $this->status;
+    }
+
+    /*** @var array */
+    protected array $iterators = [];
 
     /**
-     * @param string $eventData
-     *
-     * @return array
+     * @return iterable
      */
-    private function parseEvent(string $eventData): array
+    public function getIterator(): iterable
     {
-        $event = [];
-        $lines = explode("\n", $eventData);
+        return $this->iterators[] = new class ($this) implements Iterator {
+            /*** @var \Revolt\EventLoop\Suspension[] */
+            protected array $waiters = [];
 
-        foreach ($lines as $line) {
-            if (!str_contains($line, ':')) {
-                continue;
+            /**
+             * @param ServerSentEvents $capture
+             */
+            public function __construct(protected readonly ServerSentEvents $capture)
+            {
             }
 
-            [$field, $value] = explode(':', $line, 2);
-            $event[trim($field)] = trim($value);
-        }
-        return $event;
+            /**
+             * @param array|null $event
+             *
+             * @return void
+             */
+            public function onEvent(array|null $event): void
+            {
+                while ($suspension = array_shift($this->waiters)) {
+                    Coroutine::resume($suspension, $event);
+                }
+            }
+
+            /*** @return void */
+            public function onComplete(): void
+            {
+                while ($suspension = array_shift($this->waiters)) {
+                    Coroutine::resume($suspension);
+                }
+            }
+
+            /**
+             * @param Throwable $exception
+             *
+             * @return void
+             */
+            public function onError(Throwable $exception): void
+            {
+                while ($suspension = array_shift($this->waiters)) {
+                    Coroutine::throw($suspension, $exception);
+                }
+            }
+
+            /**
+             * @return array|null
+             */
+            public function current(): array|null
+            {
+                $this->waiters[] = $suspension = getSuspension();
+                return Coroutine::suspend($suspension);
+            }
+
+            /**
+             * @return mixed
+             */
+            public function key(): mixed
+            {
+                return null;
+            }
+
+            /**
+             * @return bool
+             */
+            public function valid(): bool
+            {
+                return in_array($this->capture->getStatus(), ['pending', 'inject'], true);
+            }
+
+            /**
+             * @return void
+             */
+            public function next(): void
+            {
+                // nothing happens
+            }
+
+            /**
+             * @return void
+             */
+            public function rewind(): void
+            {
+                // nothing happens
+            }
+        };
     }
+
+    /*** @var \Closure|null */
+    public Closure|null $onEvent = null;
+
+    /*** @var \Closure|null */
+    public Closure|null $onComplete = null;
 }
