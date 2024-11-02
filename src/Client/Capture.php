@@ -1,4 +1,14 @@
 <?php declare(strict_types=1);
+/**
+ * Copyright © 2024 cclilshy
+ * Email: jingnigg@gmail.com
+ *
+ * This software is licensed under the MIT License.
+ * For full license details, please visit: https://opensource.org/licenses/MIT
+ *
+ * By using this software, you agree to the terms of the license.
+ * Contributions, suggestions, and feedback are always welcome!
+ */
 
 namespace Ripple\Http\Client;
 
@@ -6,7 +16,7 @@ use Exception;
 use GuzzleHttp\Psr7\Response;
 use Throwable;
 
-abstract class Capturer
+abstract class Capture
 {
     /**
      * 装载失败

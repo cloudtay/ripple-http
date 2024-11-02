@@ -1,50 +1,39 @@
 <?php declare(strict_types=1);
-/*
- * Copyright (c) 2023-2024.
+/**
+ * Copyright © 2024 cclilshy
+ * Email: jingnigg@gmail.com
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * This software is licensed under the MIT License.
+ * For full license details, please visit: https://opensource.org/licenses/MIT
  *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- * 特此免费授予任何获得本软件及相关文档文件（“软件”）副本的人，不受限制地处理
- * 本软件，包括但不限于使用、复制、修改、合并、出版、发行、再许可和/或销售
- * 软件副本的权利，并允许向其提供本软件的人做出上述行为，但须符合以下条件：
- *
- * 上述版权声明和本许可声明应包含在本软件的所有副本或主要部分中。
- *
- * 本软件按“原样”提供，不提供任何形式的保证，无论是明示或暗示的，
- * 包括但不限于适销性、特定目的的适用性和非侵权性的保证。在任何情况下，
- * 无论是合同诉讼、侵权行为还是其他方面，作者或版权持有人均不对
- * 由于软件或软件的使用或其他交易而引起的任何索赔、损害或其他责任承担责任。
+ * By using this software, you agree to the terms of the license.
+ * Contributions, suggestions, and feedback are always welcome!
  */
 
 namespace Ripple\Http\Client;
 
+use GuzzleHttp\Psr7\MultipartStream;
 use GuzzleHttp\Psr7\Response;
-use Ripple\Socket\SocketStream;
-use Ripple\Stream\Exception\RuntimeException;
+use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
+use Ripple\Coroutine;
+use Ripple\Coroutine\WaitGroup;
+use Ripple\Socket\SocketStream;
+use Ripple\Stream\Exception\ConnectionException;
+use Ripple\Stream\Exception\RuntimeException;
+use Throwable;
 
+use function Co\cancel;
+use function Co\delay;
+use function Co\getSuspension;
 use function count;
 use function ctype_xdigit;
 use function explode;
 use function fclose;
+use function fopen;
 use function fwrite;
 use function hexdec;
+use function implode;
 use function intval;
 use function is_resource;
 use function strlen;
@@ -98,11 +87,17 @@ class Connection
     /*** @var mixed|null */
     private mixed $output = null;
 
+    /*** @var \Ripple\Http\Client\Capture|null */
+    private Capture|null $capture = null;
+
+    private WaitGroup $waitGroup;
+
     /**
      * @param SocketStream $stream
      */
     public function __construct(public SocketStream $stream)
     {
+        $this->waitGroup = new WaitGroup();
         $this->reset();
     }
 
@@ -130,6 +125,7 @@ class Connection
         $this->chunk         = false;
         $this->chunkLength   = 0;
         $this->chunkStep     = 0;
+        $this->capture = null;
     }
 
     /**
@@ -141,18 +137,36 @@ class Connection
     public function tick(string|false $content): ResponseInterface|null
     {
         if ($content === false) {
-            if (!$this->headers) {
-                throw new RuntimeException('Response header is required');
-            } elseif (isset($this->headers['CONTENT-LENGTH'])) {
-                throw new RuntimeException('Response content length is required');
-            } elseif ($this->chunk) {
-                throw new RuntimeException('Response chunked is required');
-            } else {
-                $this->step = 2;
-            }
+            return $this->tickClose();
         }
-
         $this->buffer .= $content;
+        return $this->process();
+    }
+
+    /**
+     * @return ResponseInterface|null
+     * @throws \Ripple\Stream\Exception\RuntimeException
+     */
+    public function tickClose(): ResponseInterface|null
+    {
+        if (!$this->headers) {
+            throw new RuntimeException('Response header is required');
+        } elseif (isset($this->headers['CONTENT-LENGTH'])) {
+            throw new RuntimeException('Response content length is required');
+        } elseif ($this->chunk) {
+            throw new RuntimeException('Response chunked is required');
+        } else {
+            $this->step = 2;
+        }
+        return $this->process();
+    }
+
+    /**
+     * @return \Psr\Http\Message\ResponseInterface|null
+     * @throws \Ripple\Stream\Exception\RuntimeException
+     */
+    public function process(): ResponseInterface|null
+    {
         if ($this->step === 0) {
             if ($headerEnd = strpos($this->buffer, "\r\n\r\n")) {
                 $buffer = $this->freeBuffer();
@@ -172,9 +186,7 @@ class Connection
                 $this->statusCode    = intval($base[1]);
                 $this->statusMessage = $base[2];
 
-                /**
-                 * Parse header
-                 */
+                /*** Parse header*/
                 while ($line = strtok("\r\n")) {
                     $lineParam = explode(': ', $line, 2);
                     if (count($lineParam) >= 2) {
@@ -197,6 +209,8 @@ class Connection
                         }
                     }
                 }
+
+                $this->capture?->processHeader($this->headers);
             }
         }
 
@@ -245,21 +259,17 @@ class Connection
                     $this->chunkStep = 0;
                 }
             } while ($this->step !== 2);
-
             $this->buffer = $buffer;
         }
 
         if ($this->step === 2) {
-            $response = new Response(
+            return new Response(
                 $this->statusCode,
                 $this->headers,
                 $this->content,
                 $this->versionString,
                 $this->statusMessage,
             );
-            $this->reset();
-
-            return $response;
         }
         return null;
     }
@@ -289,6 +299,8 @@ class Connection
         } else {
             $this->content .= $content;
         }
+
+        $this->capture?->processContent($content);
     }
 
     /**
@@ -299,5 +311,152 @@ class Connection
     public function setOutput(mixed $resource): void
     {
         $this->output = $resource;
+    }
+
+    /**
+     * @param \Psr\Http\Message\RequestInterface $request
+     * @param array                              $option
+     *
+     * @return \GuzzleHttp\Psr7\Response
+     * @throws \Ripple\Stream\Exception\ConnectionException
+     * @throws \Ripple\Stream\Exception\RuntimeException
+     */
+    public function request(RequestInterface $request, array $option = []): Response
+    {
+        $this->waitGroup->wait();
+        $this->waitGroup->add();
+        try {
+            return $this->queue($request, $option);
+        } finally {
+            $this->reset();
+            $this->waitGroup->done();
+        }
+    }
+
+    /**
+     * @param \Psr\Http\Message\RequestInterface $request
+     * @param array                              $option
+     *
+     * @return \GuzzleHttp\Psr7\Response
+     * @throws \Ripple\Stream\Exception\ConnectionException
+     * @throws \Ripple\Stream\Exception\RuntimeException
+     */
+    private function queue(RequestInterface $request, array $option = []): Response
+    {
+        $uri    = $request->getUri();
+        $method = $request->getMethod();
+
+        if (!$path = $uri->getPath()) {
+            $path = '/';
+        }
+
+        if ($query = $uri->getQuery()) {
+            $query = "?{$query}";
+        } else {
+            $query = '';
+        }
+
+        $this->capture = $capture = $option['capture'] ?? null;
+        if (!$capture instanceof Capture) {
+            $capture = null;
+        }
+
+        $suspension = getSuspension();
+        $header     = "{$method} {$path}{$query} HTTP/1.1\r\n";
+        foreach ($request->getHeaders() as $name => $values) {
+            $header .= "{$name}: " . implode(', ', $values) . "\r\n";
+        }
+
+        $this->stream->write($header);
+        if ($bodyStream = $request->getBody()) {
+            if (!$request->getHeader('Content-Length')) {
+                $size = $bodyStream->getSize();
+                $size > 0 && $this->stream->write("Content-Length: {$bodyStream->getSize()}\r\n");
+            }
+
+            if ($bodyStream->getMetadata('uri') === 'php://temp') {
+                $this->stream->write("\r\n");
+                if ($bodyContent = $bodyStream->getContents()) {
+                    $this->stream->write($bodyContent);
+                }
+            } elseif ($bodyStream instanceof MultipartStream) {
+                if (!$request->getHeader('Content-Type')) {
+                    $this->stream->write("Content-Type: multipart/form-data; boundary={$bodyStream->getBoundary()}\r\n");
+                }
+                $this->stream->write("\r\n");
+                try {
+                    while (!$bodyStream->eof()) {
+                        $this->stream->write($bodyStream->read(8192));
+                    }
+                } catch (Throwable) {
+                    $bodyStream->close();
+                    $this->stream->close();
+                    throw new ConnectionException('Invalid body stream');
+                }
+            } else {
+                throw new ConnectionException('Invalid body stream');
+            }
+        } else {
+            $this->stream->write("\r\n");
+        }
+
+        /*** Parse response process*/
+        if ($timeout = $option['timeout'] ?? null) {
+            $timeoutOID = delay(static function () use ($suspension) {
+                Coroutine::throw(
+                    $suspension,
+                    new ConnectionException('Request timeout', ConnectionException::CONNECTION_TIMEOUT)
+                );
+            }, $timeout);
+        }
+
+        if ($sink = $option['sink'] ?? null) {
+            $this->setOutput(fopen($sink, 'wb'));
+        }
+
+        while (1) {
+            try {
+                $this->stream->waitForReadable();
+            } catch (Throwable $e) {
+                if (isset($timeoutOID)) {
+                    cancel($timeoutOID);
+                }
+
+                if ($sink && is_resource($sink)) {
+                    fclose($sink);
+                }
+
+                $this->stream->close();
+                throw new ConnectionException(
+                    'Connection closed by peer',
+                    ConnectionException::CONNECTION_CLOSED,
+                    null,
+                    $this->stream,
+                    true
+                );
+            }
+
+            $content = $this->stream->readContinuously(8192);
+            if ($content === '') {
+                if (!$this->stream->eof()) {
+                    continue;
+                }
+                $response = $this->tickClose();
+            } else {
+                $response = $this->tick($content);
+            }
+            if ($response) {
+                if (isset($timeoutOID)) {
+                    cancel($timeoutOID);
+                }
+
+                if ($sink && is_resource($sink)) {
+                    fclose($sink);
+                }
+
+                $this->capture?->onComplete($response);
+                return $response;
+            }
+        }
     }
 }
