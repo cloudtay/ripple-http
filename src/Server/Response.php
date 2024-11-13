@@ -14,7 +14,7 @@ namespace Ripple\Http\Server;
 
 use Closure;
 use Generator;
-use Ripple\Socket\SocketStream;
+use Ripple\Socket;
 use Ripple\Stream;
 use Ripple\Stream\Exception\ConnectionException;
 use Throwable;
@@ -52,9 +52,9 @@ class Response
     protected string $statusText = 'OK';
 
     /**
-     * @param SocketStream $stream
+     * @param Socket $stream
      */
-    public function __construct(private readonly SocketStream $stream)
+    public function __construct(private readonly Socket $stream)
     {
     }
 
@@ -199,9 +199,9 @@ class Response
     /**
      * @Author cclilshy
      * @Date   2024/9/1 14:12
-     * @return SocketStream
+     * @return Socket
      */
-    public function getStream(): SocketStream
+    public function getStream(): Socket
     {
         return $this->stream;
     }
@@ -300,18 +300,6 @@ class Response
     }
 
     /**
-     * @param string $name
-     * @param string $value
-     *
-     * @return $this
-     */
-    public function withCookie(string $name, string $value): static
-    {
-        $this->cookies[$name] = $value;
-        return $this;
-    }
-
-    /**
      * @param array $cookies
      *
      * @return $this
@@ -321,6 +309,18 @@ class Response
         foreach ($cookies as $name => $value) {
             $this->withCookie($name, $value);
         }
+        return $this;
+    }
+
+    /**
+     * @param string $name
+     * @param string $value
+     *
+     * @return $this
+     */
+    public function withCookie(string $name, string $value): static
+    {
+        $this->cookies[$name] = $value;
         return $this;
     }
 

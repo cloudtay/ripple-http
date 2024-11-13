@@ -41,6 +41,16 @@ class Guzzle
         $this->rippleHandler = new RippleHandler($httpClient);
     }
 
+    /**
+     * @param array $config
+     *
+     * @return \GuzzleHttp\Client
+     */
+    public static function newClient(array $config = []): Client
+    {
+        return new Client(array_merge(['handler' => self::getInstance()->getHandler()], $config));
+    }
+
     /*** @return Guzzle */
     public static function getInstance(): Guzzle
     {
@@ -48,16 +58,6 @@ class Guzzle
             self::$instance = new self();
         }
         return self::$instance;
-    }
-
-    /**
-     * @Author cclilshy
-     * @Date   2024/8/31 14:28
-     * @return RippleHandler
-     */
-    public function getHandler(): RippleHandler
-    {
-        return $this->rippleHandler;
     }
 
     /**
@@ -69,12 +69,12 @@ class Guzzle
     }
 
     /**
-     * @param array $config
-     *
-     * @return \GuzzleHttp\Client
+     * @Author cclilshy
+     * @Date   2024/8/31 14:28
+     * @return RippleHandler
      */
-    public static function newClient(array $config = []): Client
+    public function getHandler(): RippleHandler
     {
-        return new Client(array_merge(['handler' => self::getInstance()->getHandler()], $config));
+        return $this->rippleHandler;
     }
 }

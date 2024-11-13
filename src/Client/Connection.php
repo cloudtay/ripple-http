@@ -16,9 +16,9 @@ use GuzzleHttp\Psr7\MultipartStream;
 use GuzzleHttp\Psr7\Response;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
-use Ripple\Coroutine;
+use Ripple\Coroutine\Coroutine;
 use Ripple\Coroutine\WaitGroup;
-use Ripple\Socket\SocketStream;
+use Ripple\Socket;
 use Ripple\Stream\Exception\ConnectionException;
 use Ripple\Stream\Exception\RuntimeException;
 use Throwable;
@@ -93,9 +93,9 @@ class Connection
     private WaitGroup $waitGroup;
 
     /**
-     * @param SocketStream $stream
+     * @param Socket $stream
      */
-    public function __construct(public SocketStream $stream)
+    public function __construct(public Socket $stream)
     {
         $this->waitGroup = new WaitGroup();
         $this->reset();
@@ -126,6 +126,163 @@ class Connection
         $this->chunkLength   = 0;
         $this->chunkStep     = 0;
         $this->capture = null;
+    }
+
+    /**
+     * @param \Psr\Http\Message\RequestInterface $request
+     * @param array                              $option
+     *
+     * @return \GuzzleHttp\Psr7\Response
+     * @throws \Ripple\Stream\Exception\ConnectionException
+     * @throws \Ripple\Stream\Exception\RuntimeException
+     */
+    public function request(RequestInterface $request, array $option = []): Response
+    {
+        $this->waitGroup->wait();
+        $this->waitGroup->add();
+        try {
+            return $this->queue($request, $option);
+        } finally {
+            $this->reset();
+            $this->waitGroup->done();
+        }
+    }
+
+    /**
+     * @param \Psr\Http\Message\RequestInterface $request
+     * @param array                              $option
+     *
+     * @return \GuzzleHttp\Psr7\Response
+     * @throws \Ripple\Stream\Exception\ConnectionException
+     * @throws \Ripple\Stream\Exception\RuntimeException
+     */
+    private function queue(RequestInterface $request, array $option = []): Response
+    {
+        $uri    = $request->getUri();
+        $method = $request->getMethod();
+
+        if (!$path = $uri->getPath()) {
+            $path = '/';
+        }
+
+        if ($query = $uri->getQuery()) {
+            $query = "?{$query}";
+        } else {
+            $query = '';
+        }
+
+        $this->capture = $capture = $option['capture'] ?? null;
+        if (!$capture instanceof Capture) {
+            $capture = null;
+        }
+
+        $suspension = getSuspension();
+        $header     = "{$method} {$path}{$query} HTTP/1.1\r\n";
+        foreach ($request->getHeaders() as $name => $values) {
+            $header .= "{$name}: " . implode(', ', $values) . "\r\n";
+        }
+
+        $this->stream->write($header);
+        if ($bodyStream = $request->getBody()) {
+            if (!$request->getHeader('Content-Length')) {
+                $size = $bodyStream->getSize();
+                $size > 0 && $this->stream->write("Content-Length: {$bodyStream->getSize()}\r\n");
+            }
+
+            if ($bodyStream->getMetadata('uri') === 'php://temp') {
+                $this->stream->write("\r\n");
+                if ($bodyContent = $bodyStream->getContents()) {
+                    $this->stream->write($bodyContent);
+                }
+            } elseif ($bodyStream instanceof MultipartStream) {
+                if (!$request->getHeader('Content-Type')) {
+                    $this->stream->write("Content-Type: multipart/form-data; boundary={$bodyStream->getBoundary()}\r\n");
+                }
+                $this->stream->write("\r\n");
+                try {
+                    while (!$bodyStream->eof()) {
+                        $this->stream->write($bodyStream->read(8192));
+                    }
+                } catch (Throwable) {
+                    $bodyStream->close();
+                    $this->stream->close();
+                    throw new ConnectionException('Invalid body stream');
+                }
+            } else {
+                throw new ConnectionException('Invalid body stream');
+            }
+        } else {
+            $this->stream->write("\r\n");
+        }
+
+        /*** Parse response process*/
+        if ($timeout = $option['timeout'] ?? null) {
+            $timeoutOID = delay(static function () use ($suspension) {
+                Coroutine::throw(
+                    $suspension,
+                    new ConnectionException('Request timeout', ConnectionException::CONNECTION_TIMEOUT)
+                );
+            }, $timeout);
+        }
+
+        if ($sink = $option['sink'] ?? null) {
+            $this->setOutput(fopen($sink, 'wb'));
+        }
+
+        while (1) {
+            try {
+                $this->stream->waitForReadable();
+            } catch (Throwable $e) {
+                if (isset($timeoutOID)) {
+                    cancel($timeoutOID);
+                }
+
+                if ($sink && is_resource($sink)) {
+                    fclose($sink);
+                }
+
+                $this->stream->close();
+                throw new ConnectionException(
+                    'Connection closed by peer',
+                    ConnectionException::CONNECTION_CLOSED,
+                    null,
+                    $this->stream,
+                    true
+                );
+            }
+
+            $content = $this->stream->readContinuously(8192);
+            if ($content === '') {
+                if (!$this->stream->eof()) {
+                    continue;
+                }
+                $response = $this->tickClose();
+            } else {
+                $response = $this->tick($content);
+            }
+            if ($response) {
+                if (isset($timeoutOID)) {
+                    cancel($timeoutOID);
+                }
+
+                if ($sink && is_resource($sink)) {
+                    fclose($sink);
+                }
+
+                $this->capture?->onComplete($response);
+                return $response;
+            }
+        }
+    }
+
+    /**
+     * @param mixed $resource
+     *
+     * @return void
+     */
+    public function setOutput(mixed $resource): void
+    {
+        $this->output = $resource;
     }
 
     /**
@@ -301,162 +458,5 @@ class Connection
         }
 
         $this->capture?->processContent($content);
-    }
-
-    /**
-     * @param mixed $resource
-     *
-     * @return void
-     */
-    public function setOutput(mixed $resource): void
-    {
-        $this->output = $resource;
-    }
-
-    /**
-     * @param \Psr\Http\Message\RequestInterface $request
-     * @param array                              $option
-     *
-     * @return \GuzzleHttp\Psr7\Response
-     * @throws \Ripple\Stream\Exception\ConnectionException
-     * @throws \Ripple\Stream\Exception\RuntimeException
-     */
-    public function request(RequestInterface $request, array $option = []): Response
-    {
-        $this->waitGroup->wait();
-        $this->waitGroup->add();
-        try {
-            return $this->queue($request, $option);
-        } finally {
-            $this->reset();
-            $this->waitGroup->done();
-        }
-    }
-
-    /**
-     * @param \Psr\Http\Message\RequestInterface $request
-     * @param array                              $option
-     *
-     * @return \GuzzleHttp\Psr7\Response
-     * @throws \Ripple\Stream\Exception\ConnectionException
-     * @throws \Ripple\Stream\Exception\RuntimeException
-     */
-    private function queue(RequestInterface $request, array $option = []): Response
-    {
-        $uri    = $request->getUri();
-        $method = $request->getMethod();
-
-        if (!$path = $uri->getPath()) {
-            $path = '/';
-        }
-
-        if ($query = $uri->getQuery()) {
-            $query = "?{$query}";
-        } else {
-            $query = '';
-        }
-
-        $this->capture = $capture = $option['capture'] ?? null;
-        if (!$capture instanceof Capture) {
-            $capture = null;
-        }
-
-        $suspension = getSuspension();
-        $header     = "{$method} {$path}{$query} HTTP/1.1\r\n";
-        foreach ($request->getHeaders() as $name => $values) {
-            $header .= "{$name}: " . implode(', ', $values) . "\r\n";
-        }
-
-        $this->stream->write($header);
-        if ($bodyStream = $request->getBody()) {
-            if (!$request->getHeader('Content-Length')) {
-                $size = $bodyStream->getSize();
-                $size > 0 && $this->stream->write("Content-Length: {$bodyStream->getSize()}\r\n");
-            }
-
-            if ($bodyStream->getMetadata('uri') === 'php://temp') {
-                $this->stream->write("\r\n");
-                if ($bodyContent = $bodyStream->getContents()) {
-                    $this->stream->write($bodyContent);
-                }
-            } elseif ($bodyStream instanceof MultipartStream) {
-                if (!$request->getHeader('Content-Type')) {
-                    $this->stream->write("Content-Type: multipart/form-data; boundary={$bodyStream->getBoundary()}\r\n");
-                }
-                $this->stream->write("\r\n");
-                try {
-                    while (!$bodyStream->eof()) {
-                        $this->stream->write($bodyStream->read(8192));
-                    }
-                } catch (Throwable) {
-                    $bodyStream->close();
-                    $this->stream->close();
-                    throw new ConnectionException('Invalid body stream');
-                }
-            } else {
-                throw new ConnectionException('Invalid body stream');
-            }
-        } else {
-            $this->stream->write("\r\n");
-        }
-
-        /*** Parse response process*/
-        if ($timeout = $option['timeout'] ?? null) {
-            $timeoutOID = delay(static function () use ($suspension) {
-                Coroutine::throw(
-                    $suspension,
-                    new ConnectionException('Request timeout', ConnectionException::CONNECTION_TIMEOUT)
-                );
-            }, $timeout);
-        }
-
-        if ($sink = $option['sink'] ?? null) {
-            $this->setOutput(fopen($sink, 'wb'));
-        }
-
-        while (1) {
-            try {
-                $this->stream->waitForReadable();
-            } catch (Throwable $e) {
-                if (isset($timeoutOID)) {
-                    cancel($timeoutOID);
-                }
-
-                if ($sink && is_resource($sink)) {
-                    fclose($sink);
-                }
-
-                $this->stream->close();
-                throw new ConnectionException(
-                    'Connection closed by peer',
-                    ConnectionException::CONNECTION_CLOSED,
-                    null,
-                    $this->stream,
-                    true
-                );
-            }
-
-            $content = $this->stream->readContinuously(8192);
-            if ($content === '') {
-                if (!$this->stream->eof()) {
-                    continue;
-                }
-                $response = $this->tickClose();
-            } else {
-                $response = $this->tick($content);
-            }
-            if ($response) {
-                if (isset($timeoutOID)) {
-                    cancel($timeoutOID);
-                }
-
-                if ($sink && is_resource($sink)) {
-                    fclose($sink);
-                }
-
-                $this->capture?->onComplete($response);
-                return $response;
-            }
-        }
     }
 }

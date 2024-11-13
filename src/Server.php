@@ -13,13 +13,12 @@
 namespace Ripple\Http;
 
 use Closure;
-use Co\IO;
 use InvalidArgumentException;
 use Ripple\Http\Enum\Status;
 use Ripple\Http\Server\Connection;
 use Ripple\Http\Server\Exception\FormatException;
 use Ripple\Http\Server\Request;
-use Ripple\Socket\SocketStream;
+use Ripple\Socket;
 use Ripple\Stream\Exception\ConnectionException;
 use Ripple\Utils\Output;
 use Throwable;
@@ -46,8 +45,8 @@ class Server
      */
     public Closure $onRequest;
 
-    /*** @var SocketStream */
-    private SocketStream $server;
+    /*** @var \Ripple\Socket */
+    private Socket $server;
 
     /**
      * @param string     $address
@@ -74,7 +73,7 @@ class Server
         };
 
         $server = match ($scheme) {
-            'http', 'https' => IO::Socket()->server("tcp://{$host}:{$port}", $context),
+            'http', 'https' => Socket::server("tcp://{$host}:{$port}", $context),
             default         => throw new InvalidArgumentException('Address format error')
         };
 
@@ -92,7 +91,7 @@ class Server
      */
     public function listen(): void
     {
-        $this->server->onReadable(function (SocketStream $stream) {
+        $this->server->onReadable(function (Socket $stream) {
             if (!$client = $stream->accept()) {
                 return;
             }
@@ -123,11 +122,11 @@ class Server
     }
 
     /**
-     * @param SocketStream $stream
+     * @param \Ripple\Socket $stream
      *
      * @return void
      */
-    private function listenSocket(SocketStream $stream): void
+    private function listenSocket(Socket $stream): void
     {
         $connection = new Connection($stream);
         $connection->listen(function (array $requestInfo) use ($stream) {

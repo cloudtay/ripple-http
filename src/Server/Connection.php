@@ -15,7 +15,7 @@ namespace Ripple\Http\Server;
 use Closure;
 use Ripple\Http\Server\Exception\FormatException;
 use Ripple\Http\Server\Upload\MultipartHandler;
-use Ripple\Socket\SocketStream;
+use Ripple\Socket;
 use Ripple\Stream\Exception\RuntimeException;
 use Ripple\Utils\Output;
 use Throwable;
@@ -82,9 +82,9 @@ class Connection
     private int $contentLength;
 
     /**
-     * @param SocketStream $stream
+     * @param Socket $stream
      */
-    public function __construct(private readonly SocketStream $stream)
+    public function __construct(private readonly Socket $stream)
     {
         $this->reset();
     }
@@ -120,7 +120,7 @@ class Connection
             }
         });
 
-        $this->stream->onReadable(function (SocketStream $stream) use ($builder) {
+        $this->stream->onReadable(function (Socket $stream) use ($builder) {
             try {
                 $content = $stream->read(8192);
             } catch (Throwable) {

@@ -12,11 +12,10 @@
 
 namespace Ripple\Http\Client;
 
-use Co\IO;
-use Ripple\Socket\SocketStream;
-use Ripple\Socket\Tunnel\Http;
-use Ripple\Socket\Tunnel\Socks5;
+use Ripple\Socket;
 use Ripple\Stream\Exception\ConnectionException;
+use Ripple\Tunnel\Http;
+use Ripple\Tunnel\Socks5;
 use Throwable;
 
 use function array_pop;
@@ -163,13 +162,13 @@ class ConnectionPool
                 $payload['username'] = $parse['user'];
                 $payload['password'] = $parse['pass'];
             }
-            $proxySocketStream = $this->createProxySocketStream($parse, $payload);
-            $ssl && IO::Socket()->enableSSL($proxySocketStream, $timeout);
-            return new Connection($proxySocketStream);
+            $proxySocket = $this->createProxySocket($parse, $payload);
+            $ssl && $proxySocket->enableSSL();
+            return new Connection($proxySocket);
         }
 
-        $stream = IO::Socket()->connect("tcp://{$host}:{$port}", $timeout);
-        $ssl && IO::Socket()->enableSSL($stream, $timeout);
+        $stream = Socket::connect("tcp://{$host}:{$port}", $timeout);
+        $ssl && $stream->enableSSL();
         return new Connection($stream);
     }
 
@@ -180,14 +179,14 @@ class ConnectionPool
      * @param array $parse
      * @param array $payload
      *
-     * @return SocketStream
+     * @return Socket
      * @throws ConnectionException
      */
-    private function createProxySocketStream(array $parse, array $payload): SocketStream
+    private function createProxySocket(array $parse, array $payload): Socket
     {
         return match ($parse['scheme']) {
-            'socks', 'socks5' => Socks5::connect("tcp://{$parse['host']}:{$parse['port']}", $payload)->getSocketStream(),
-            'http', 'https'   => Http::connect("tcp://{$parse['host']}:{$parse['port']}", $payload)->getSocketStream(),
+            'socks', 'socks5' => Socks5::connect("tcp://{$parse['host']}:{$parse['port']}", $payload)->getSocket(),
+            'http', 'https'   => Http::connect("tcp://{$parse['host']}:{$parse['port']}", $payload)->getSocket(),
             default           => throw new ConnectionException('Unsupported proxy protocol', ConnectionException::CONNECTION_ERROR),
         };
     }
@@ -209,7 +208,7 @@ class ConnectionPool
             unset($this->listenEventMap[$streamId]);
         }
         $this->idleConnections[$key][$streamId] = $connection;
-        $this->listenEventMap[$streamId]        = $connection->stream->onReadable(function (SocketStream $stream) use ($key, $connection) {
+        $this->listenEventMap[$streamId] = $connection->stream->onReadable(function (Socket $stream) use ($key, $connection) {
             try {
                 if ($stream->read(1) === '' && $stream->eof()) {
                     throw new ConnectionException('Connection closed by peer', ConnectionException::CONNECTION_CLOSED);

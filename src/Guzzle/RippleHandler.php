@@ -22,7 +22,7 @@ use Throwable;
 
 class RippleHandler
 {
-    public function __construct(private Client $httpClient)
+    public function __construct(private readonly Client $httpClient)
     {
     }
 

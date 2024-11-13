@@ -16,7 +16,7 @@ use Closure;
 use Exception;
 use GuzzleHttp\Psr7\Response;
 use Iterator;
-use Ripple\Coroutine;
+use Ripple\Coroutine\Coroutine;
 use Ripple\Http\Client\Capture;
 use Throwable;
 
@@ -35,9 +35,14 @@ use function trim;
  */
 class ServerSentEvents extends Capture
 {
+    /*** @var \Closure|null */
+    public Closure|null $onEvent = null;
+    /*** @var \Closure|null */
+    public Closure|null $onComplete = null;
+    /*** @var array */
+    protected array $iterators = [];
     /*** @var string */
     private string $status = 'pending';
-
     /*** @var string */
     private string $buffer = '';
 
@@ -138,15 +143,6 @@ class ServerSentEvents extends Capture
         }
     }
 
-    /*** @return string */
-    public function getStatus(): string
-    {
-        return $this->status;
-    }
-
-    /*** @var array */
-    protected array $iterators = [];
-
     /**
      * @return iterable
      */
@@ -238,9 +234,9 @@ class ServerSentEvents extends Capture
         };
     }
 
-    /*** @var \Closure|null */
-    public Closure|null $onEvent = null;
-
-    /*** @var \Closure|null */
-    public Closure|null $onComplete = null;
+    /*** @return string */
+    public function getStatus(): string
+    {
+        return $this->status;
+    }
 }

@@ -12,7 +12,7 @@
 
 namespace Ripple\Http\Server;
 
-use Ripple\Socket\SocketStream;
+use Ripple\Socket;
 
 use function array_merge;
 use function is_string;
@@ -30,30 +30,30 @@ class Request
     protected Response $response;
 
     /**
-     * @param SocketStream $stream
-     * @param array        $GET
-     * @param array        $POST
-     * @param array        $COOKIE
-     * @param array        $FILES
-     * @param array        $SERVER
-     * @param mixed|null   $CONTENT
+     * @param Socket     $stream
+     * @param array      $GET
+     * @param array      $POST
+     * @param array      $COOKIE
+     * @param array      $FILES
+     * @param array      $SERVER
+     * @param mixed|null $CONTENT
      */
     public function __construct(
-        public readonly SocketStream $stream,
-        public readonly array        $GET = [],
-        public readonly array        $POST = [],
-        public readonly array        $COOKIE = [],
-        public readonly array        $FILES = [],
-        public readonly array        $SERVER = [],
-        public readonly mixed        $CONTENT = null,
+        public readonly Socket $stream,
+        public readonly array  $GET = [],
+        public readonly array  $POST = [],
+        public readonly array  $COOKIE = [],
+        public readonly array  $FILES = [],
+        public readonly array  $SERVER = [],
+        public readonly mixed  $CONTENT = null,
     ) {
         $this->REQUEST = array_merge($this->GET, $this->POST);
     }
 
     /**
-     * @return SocketStream
+     * @return Socket
      */
-    public function getStream(): SocketStream
+    public function getStream(): Socket
     {
         return $this->stream;
     }

@@ -12,15 +12,15 @@
 
 namespace Ripple\Http;
 
-use Co\IO;
 use GuzzleHttp\Psr7\Response;
 use Psr\Http\Message\RequestInterface;
 use Ripple\Http\Client\Capture;
 use Ripple\Http\Client\Connection;
 use Ripple\Http\Client\ConnectionPool;
-use Ripple\Socket\Tunnel\Http;
-use Ripple\Socket\Tunnel\Socks5;
+use Ripple\Socket;
 use Ripple\Stream\Exception\ConnectionException;
+use Ripple\Tunnel\Http;
+use Ripple\Tunnel\Socks5;
 use Throwable;
 
 use function getenv;
@@ -145,19 +145,19 @@ class Client
                 switch ($parse['scheme']) {
                     case 'socks':
                     case 'socks5':
-                        $tunnelSocket = Socks5::connect("tcp://{$parse['host']}:{$parse['port']}", $payload)->getSocketStream();
-                        $ssl && IO::Socket()->enableSSL($tunnelSocket, $timeout);
+                        $tunnelSocket = Socks5::connect("tcp://{$parse['host']}:{$parse['port']}", $payload)->getSocket();
+                        $ssl && $tunnelSocket->enableSSL();
                         $connection = new Connection($tunnelSocket);
                         break;
                     case 'http':
-                        $tunnelSocket = Http::connect("tcp://{$parse['host']}:{$parse['port']}", $payload)->getSocketStream();
-                        $ssl && IO::Socket()->enableSSL($tunnelSocket, $timeout);
+                        $tunnelSocket = Http::connect("tcp://{$parse['host']}:{$parse['port']}", $payload)->getSocket();
+                        $ssl && $tunnelSocket->enableSSL();
                         $connection = new Connection($tunnelSocket);
                         break;
                     case 'https':
-                        $tunnel       = IO::Socket()->connectWithSSL("tcp://{$parse['host']}:{$parse['port']}", $timeout);
-                        $tunnelSocket = Http::connect($tunnel, $payload)->getSocketStream();
-                        $ssl && IO::Socket()->enableSSL($tunnelSocket, $timeout);
+                        $tunnel       = Socket::connectWithSSL("tcp://{$parse['host']}:{$parse['port']}", $timeout);
+                        $tunnelSocket = Http::connect($tunnel, $payload)->getSocket();
+                        $ssl && $tunnelSocket->enableSSL();
                         $connection = new Connection($tunnelSocket);
                         break;
                     default:
@@ -165,8 +165,8 @@ class Client
                 }
             } else {
                 $connection = $ssl
-                    ? new Connection(IO::Socket()->connectWithSSL("ssl://{$host}:{$port}", $timeout))
-                    : new Connection(IO::Socket()->connect("tcp://{$host}:{$port}", $timeout));
+                    ? new Connection(Socket::connectWithSSL("ssl://{$host}:{$port}", $timeout))
+                    : new Connection(Socket::connect("tcp://{$host}:{$port}", $timeout));
             }
         }
 
