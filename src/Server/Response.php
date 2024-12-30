@@ -236,8 +236,16 @@ class Response
         }
 
         $headerConnection = $this->getHeader('Connection');
-        if (!$headerConnection || !str_contains(strtolower($headerConnection), 'keep-alive')) {
+        if (!$headerConnection) {
             $this->stream->close();
+        } else {
+            if (is_array($headerConnection)) {
+                $headerConnection = implode(',', $headerConnection);
+            }
+
+            if (!str_contains(strtolower($headerConnection), 'keep-alive')) {
+                $this->stream->close();
+            }
         }
     }
 
