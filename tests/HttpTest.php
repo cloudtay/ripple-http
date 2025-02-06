@@ -13,6 +13,9 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 use function Co\async;
 use function Co\cancelAll;
 
+/**
+ *
+ */
 class HttpTest extends TestCase
 {
     /**
@@ -78,6 +81,13 @@ class HttpTest extends TestCase
                 Output::exception($exception);
                 throw $exception;
             }
+
+            try {
+                $this->httpLargePost();
+            } catch (GuzzleException $exception) {
+                Output::exception($exception);
+                throw $exception;
+            }
         }
 
         \gc_collect_cycles();
@@ -100,6 +110,13 @@ class HttpTest extends TestCase
 
             try {
                 $this->httpFile();
+            } catch (GuzzleException $exception) {
+                Output::exception($exception);
+                throw $exception;
+            }
+
+            try {
+                $this->httpLargePost();
             } catch (GuzzleException $exception) {
                 Output::exception($exception);
                 throw $exception;
@@ -182,6 +199,27 @@ class HttpTest extends TestCase
             'sink'      => $path . '.bak'
         ]);
         $this->assertEquals($hash, \md5_file($path . '.bak'));
+    }
+
+    /**
+     * Tests POST request with large data
+     *
+     * @return void
+     * @throws GuzzleException
+     */
+    private function httpLargePost(): void
+    {
+        $largeData = \str_repeat('a', 1024 * 1024); // 1MB of data
+        $hash      = \md5($largeData);
+        $client    = Guzzle::newClient();
+        $response  = $client->post('http://127.0.0.1:8008/', [
+            'json'    => [
+                'query' => $largeData
+            ],
+            'timeout' => 30 // Increased timeout for large data
+        ]);
+
+        $this->assertEquals($largeData, $response->getBody()->getContents());
     }
 
     /**
