@@ -13,6 +13,7 @@
 namespace Ripple\Http\Server;
 
 use Closure;
+use Ripple\Http\Enum\Method;
 use Ripple\Http\Server\Exception\FormatException;
 use Ripple\Http\Server\Upload\MultipartHandler;
 use Ripple\Socket;
@@ -301,14 +302,16 @@ class Connection
      */
     private function handleRequestBody(string $method, string $body): void
     {
-        if (in_array($method, ['GET', 'HEAD'])) {
-            $this->bodyLength = 0;
-            $this->step       = 2;
-        } elseif ($method === 'POST') {
-            $this->handlePostRequest($body);
-        } elseif (in_array($method, ['PUT', 'DELETE', 'PATCH', 'OPTIONS', 'TRACE', 'CONNECT'])) {
-            $this->handleOtherMethods();
-        }
+	    $methodEnum = Method::tryFrom($method);
+
+	    if (null === $methodEnum) {
+		    $this->handleOtherMethods();
+	    } elseif ($methodEnum->hasBody()) {
+		    $this->handlePostRequest($body);
+	    } else {
+		    $this->bodyLength = 0;
+		    $this->step = 2;
+	    }
     }
 
     /**

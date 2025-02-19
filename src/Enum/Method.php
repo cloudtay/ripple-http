@@ -12,15 +12,24 @@
 
 namespace Ripple\Http\Enum;
 
-enum Method
+use function in_array;
+
+enum Method: string
 {
-    public const GET     = 'GET';
-    public const POST    = 'POST';
-    public const PUT     = 'PUT';
-    public const DELETE  = 'DELETE';
-    public const PATCH   = 'PATCH';
-    public const OPTIONS = 'OPTIONS';
-    public const HEAD    = 'HEAD';
-    public const TRACE   = 'TRACE';
-    public const CONNECT = 'CONNECT';
+    case GET        = 'GET';
+    case POST       = 'POST';
+    case PUT        = 'PUT';
+    case DELETE     = 'DELETE';
+    case PATCH      = 'PATCH';
+    case OPTIONS    = 'OPTIONS';
+    case HEAD       = 'HEAD';
+    case TRACE      = 'TRACE';
+    case CONNECT    = 'CONNECT';
+
+    private const METHOD_WITH_BODY = [self::POST, self::PUT, self::DELETE, self::PATCH];
+
+    public function hasBody(): bool
+    {
+        return in_array($this, self::METHOD_WITH_BODY, true);
+    }
 }
