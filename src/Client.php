@@ -30,6 +30,9 @@ use function parse_url;
 use function str_contains;
 use function strtolower;
 
+/**
+ *
+ */
 class Client
 {
     /*** @var ConnectionPool|null */

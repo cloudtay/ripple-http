@@ -20,8 +20,7 @@ use Ripple\Coroutine\Coroutine;
 use Ripple\Http\Client\Capture;
 use Throwable;
 
-use function array_shift;
-use function Co\getSuspension;
+use function Co\getContext;
 use function count;
 use function explode;
 use function in_array;
@@ -37,12 +36,16 @@ class ServerSentEvents extends Capture
 {
     /*** @var \Closure|null */
     public Closure|null $onEvent = null;
+
     /*** @var \Closure|null */
     public Closure|null $onComplete = null;
+
     /*** @var array */
     protected array $iterators = [];
+
     /*** @var string */
     private string $status = 'pending';
+
     /*** @var string */
     private string $buffer = '';
 
@@ -149,7 +152,8 @@ class ServerSentEvents extends Capture
     public function getIterator(): iterable
     {
         return $this->iterators[] = new class ($this) implements Iterator {
-            /*** @var \Revolt\EventLoop\Suspension[] */
+            /*** @var \Ripple\Coroutine\Context[] */
+
             protected array $waiters = [];
 
             /**
@@ -166,16 +170,18 @@ class ServerSentEvents extends Capture
              */
             public function onEvent(array|null $event): void
             {
-                while ($suspension = array_shift($this->waiters)) {
-                    Coroutine::resume($suspension, $event);
+                foreach ($this->waiters as $key => $context) {
+                    unset($this->waiters[$key]);
+                    Coroutine::resume($context, $event);
                 }
             }
 
             /*** @return void */
             public function onComplete(): void
             {
-                while ($suspension = array_shift($this->waiters)) {
-                    Coroutine::resume($suspension);
+                foreach ($this->waiters as $key => $context) {
+                    unset($this->waiters[$key]);
+                    Coroutine::resume($context);
                 }
             }
 
@@ -186,8 +192,9 @@ class ServerSentEvents extends Capture
              */
             public function onError(Throwable $exception): void
             {
-                while ($suspension = array_shift($this->waiters)) {
-                    Coroutine::throw($suspension, $exception);
+                foreach ($this->waiters as $key => $context) {
+                    unset($this->waiters[$key]);
+                    Coroutine::resume($context, $exception);
                 }
             }
 
@@ -196,8 +203,7 @@ class ServerSentEvents extends Capture
              */
             public function current(): array|null
             {
-                $this->waiters[] = $suspension = getSuspension();
-                return Coroutine::suspend($suspension);
+                return Coroutine::suspend(getContext());
             }
 
             /**
@@ -221,7 +227,7 @@ class ServerSentEvents extends Capture
              */
             public function next(): void
             {
-                // nothing happens
+                $this->waiters[] = getContext();
             }
 
             /**

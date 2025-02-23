@@ -12,6 +12,9 @@
 
 namespace Ripple\Http\Enum;
 
+/**
+ *
+ */
 enum Status
 {
     public const CONTINUE                        = 100;

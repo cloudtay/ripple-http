@@ -24,7 +24,6 @@ use Throwable;
 use function array_merge;
 use function count;
 use function explode;
-use function in_array;
 use function intval;
 use function is_array;
 use function is_string;
@@ -44,6 +43,9 @@ use function substr;
 
 use const PHP_URL_PATH;
 
+/**
+ *
+ */
 class Connection
 {
     /*** @var int */
@@ -302,16 +304,16 @@ class Connection
      */
     private function handleRequestBody(string $method, string $body): void
     {
-	    $methodEnum = Method::tryFrom($method);
+        $methodEnum = Method::tryFrom($method);
 
-	    if (null === $methodEnum) {
-		    $this->handleOtherMethods();
-	    } elseif ($methodEnum->hasBody()) {
-		    $this->handlePostRequest($body);
-	    } else {
-		    $this->bodyLength = 0;
-		    $this->step = 2;
-	    }
+        if (null === $methodEnum) {
+            $this->handleOtherMethods();
+        } elseif ($methodEnum->hasBody()) {
+            $this->handlePostRequest($body);
+        } else {
+            $this->bodyLength = 0;
+            $this->step = 2;
+        }
     }
 
     /**

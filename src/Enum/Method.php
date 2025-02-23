@@ -14,6 +14,9 @@ namespace Ripple\Http\Enum;
 
 use function in_array;
 
+/**
+ *
+ */
 enum Method: string
 {
     case GET        = 'GET';
@@ -28,6 +31,9 @@ enum Method: string
 
     private const METHOD_WITH_BODY = [self::POST, self::PUT, self::DELETE, self::PATCH];
 
+    /**
+     * @return bool
+     */
     public function hasBody(): bool
     {
         return in_array($this, self::METHOD_WITH_BODY, true);

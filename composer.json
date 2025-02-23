@@ -15,9 +15,9 @@
   "require": {
     "php": ">=8.1",
     "ext-sockets": "*",
-    "cloudtay/ripple": "^1.0",
-    "guzzlehttp/guzzle": "*",
-    "symfony/http-foundation": "*"
+    "cloudtay/ripple": "^1.0.5",
+    "symfony/http-foundation": "*",
+    "guzzlehttp/guzzle": "*"
   },
   "require-dev": {
     "ext-posix": "*",
@@ -26,7 +26,7 @@
     "ext-parallel": "*",
     "ext-zlib": "*",
     "phpunit/phpunit": "*",
-    "friendsofphp/php-cs-fixer": "*"
+    "friendsofphp/php-cs-fixer": "^3.68"
   },
   "minimum-stability": "dev",
   "prefer-stable": true

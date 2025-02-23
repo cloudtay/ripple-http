@@ -20,8 +20,14 @@ use Psr\Http\Message\RequestInterface;
 use Ripple\Http\Client;
 use Throwable;
 
+/**
+ *
+ */
 class RippleHandler
 {
+    /**
+     * @param \Ripple\Http\Client $httpClient
+     */
     public function __construct(private readonly Client $httpClient)
     {
     }

@@ -16,6 +16,9 @@ use Exception;
 use GuzzleHttp\Psr7\Response;
 use Throwable;
 
+/**
+ *
+ */
 abstract class Capture
 {
     /**

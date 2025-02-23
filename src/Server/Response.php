@@ -77,8 +77,6 @@ class Response
     {
         if (is_string($content)) {
             $this->withHeader('Content-Length', strval(strlen($content)));
-        } elseif ($content instanceof Generator) {
-            $this->removeHeader('Content-Length');
         } elseif ($content instanceof Stream) {
             $path   = $content->getMetadata('uri');
             $length = filesize($path);

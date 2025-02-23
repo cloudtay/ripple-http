@@ -16,6 +16,9 @@ use function dechex;
 use function explode;
 use function strlen;
 
+/**
+ *
+ */
 class Chunk
 {
     /**

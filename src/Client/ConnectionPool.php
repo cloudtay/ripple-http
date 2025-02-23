@@ -24,6 +24,9 @@ use function Co\cancelForked;
 use function Co\forked;
 use function parse_url;
 
+/**
+ *
+ */
 class ConnectionPool
 {
     /*** @var array */
@@ -82,6 +85,9 @@ class ConnectionPool
         }
     }
 
+    /**
+     *
+     */
     public function __destruct()
     {
         $this->clearConnectionPool();
