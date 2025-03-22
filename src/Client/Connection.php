@@ -17,10 +17,10 @@ use GuzzleHttp\Psr7\Response;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Ripple\Coroutine\Coroutine;
-use Ripple\Coroutine\WaitGroup;
 use Ripple\Socket;
 use Ripple\Stream\Exception\ConnectionException;
 use Ripple\Stream\Exception\RuntimeException;
+use Ripple\WaitGroup;
 use Throwable;
 
 use function Co\cancel;
@@ -340,7 +340,7 @@ class Connection
                 }
 
                 $this->versionString = $base[0];
-                $this->statusCode    = intval($base[1]);
+                $this->statusCode    = (int)$base[1];
                 $this->statusMessage = $base[2];
 
                 /*** Parse header*/
@@ -351,13 +351,13 @@ class Connection
                     }
                 }
 
-                if ($this->chunk = isset($this->headers['TRANSFER-ENCODING']) && $this->headers['TRANSFER-ENCODING'] === 'chunked') {
+                if ($this->chunk = (isset($this->headers['TRANSFER-ENCODING']) && $this->headers['TRANSFER-ENCODING'] === 'chunked')) {
                     $this->step   = 3;
                     $this->buffer = substr($buffer, $headerEnd + 4);
                 } else {
-                    $contentLength = $this->headers['CONTENT-LENGTH'] ?? $this->headers['CONTENT-LENGTH'] ?? null;
+                    $contentLength = $this->headers['CONTENT-LENGTH'] ?? null;
                     if ($contentLength !== null) {
-                        $this->contentLength = intval($contentLength);
+                        $this->contentLength = (int)$contentLength;
                         $buffer              = substr($buffer, $headerEnd + 4);
                         $this->output($buffer);
                         $this->bodyLength += strlen($buffer);

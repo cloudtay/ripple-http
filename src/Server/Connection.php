@@ -329,7 +329,7 @@ class Connection
         if (!isset($this->server['HTTP_CONTENT_LENGTH'])) {
             throw new RuntimeException('Content-Length is not set 1');
         }
-        $this->contentLength = intval($this->server['HTTP_CONTENT_LENGTH']);
+        $this->contentLength = (int)$this->server['HTTP_CONTENT_LENGTH'];
         if (str_contains($contentType, 'multipart/form-data')) {
             $this->handleMultipartFormData($body, $contentType);
         } else {
