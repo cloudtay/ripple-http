@@ -123,7 +123,7 @@ class Response
      *
      * @return mixed
      */
-    public function getHeader(string $name = null): mixed
+    public function getHeader(null|string $name = null): mixed
     {
         if (!$name) {
             return $this->headers;
