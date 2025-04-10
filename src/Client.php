@@ -56,7 +56,7 @@ class Client
      * @param array            $option
      *
      * @return Response
-     * @throws \Ripple\Stream\Exception\ConnectionException
+     * @throws ConnectionException
      */
     public function request(RequestInterface $request, array $option = []): Response
     {

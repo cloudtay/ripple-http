@@ -45,7 +45,7 @@ class Server
      */
     public Closure $onRequest;
 
-    /*** @var \Ripple\Socket */
+    /*** @var Socket */
     private Socket $server;
 
     /**
@@ -122,7 +122,7 @@ class Server
     }
 
     /**
-     * @param \Ripple\Socket $stream
+     * @param Socket $stream
      *
      * @return void
      */
@@ -162,9 +162,9 @@ class Server
                 $stream->close();
             } catch (FormatException) {
                 /**** The message format is illegal*/
-                $response->setStatusCode(Status::BAD_REQUEST)->setBody(Status::MESSAGES[Status::BAD_REQUEST])->respond();
+                $response->setStatusCode(Status::BAD_REQUEST->value)->setBody(Status::getMessageForCode(Status::BAD_REQUEST->value))->respond();
             } catch (Throwable $e) {
-                $response->setStatusCode(Status::INTERNAL_SERVER_ERROR)->setBody($e->getMessage())->respond();
+                $response->setStatusCode(Status::INTERNAL_SERVER_ERROR->value)->setBody($e->getMessage())->respond();
                 Output::exception($e);
             }
         });

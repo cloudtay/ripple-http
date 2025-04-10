@@ -44,7 +44,7 @@ class Guzzle
     /**
      * @param array $config
      *
-     * @return \GuzzleHttp\Client
+     * @return Client
      */
     public static function newClient(array $config = []): Client
     {

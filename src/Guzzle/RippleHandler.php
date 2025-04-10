@@ -26,7 +26,7 @@ use Throwable;
 class RippleHandler
 {
     /**
-     * @param \Ripple\Http\Client $httpClient
+     * @param Client $httpClient
      */
     public function __construct(private readonly Client $httpClient)
     {

@@ -16,6 +16,7 @@ use Closure;
 use Exception;
 use GuzzleHttp\Psr7\Response;
 use Iterator;
+use Ripple\Coroutine\Context;
 use Ripple\Coroutine\Coroutine;
 use Ripple\Http\Client\Capture;
 use Throwable;
@@ -34,10 +35,10 @@ use function trim;
  */
 class ServerSentEvents extends Capture
 {
-    /*** @var \Closure|null */
+    /*** @var Closure|null */
     public Closure|null $onEvent = null;
 
-    /*** @var \Closure|null */
+    /*** @var Closure|null */
     public Closure|null $onComplete = null;
 
     /*** @var array */
@@ -86,7 +87,7 @@ class ServerSentEvents extends Capture
     }
 
     /**
-     * @param \GuzzleHttp\Psr7\Response $response
+     * @param Response $response
      *
      * @return void
      */
@@ -152,7 +153,7 @@ class ServerSentEvents extends Capture
     public function getIterator(): iterable
     {
         return $this->iterators[] = new class ($this) implements Iterator {
-            /*** @var \Ripple\Coroutine\Context[] */
+            /*** @var Context[] */
 
             protected array $waiters = [];
 

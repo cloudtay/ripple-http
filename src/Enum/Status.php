@@ -156,13 +156,13 @@ enum Status: int
     }
 
     /**
-     * 获取状态码对应的消息（使用状态码）
+     * Obtaining the Message Corresponding to a Status Code (Using a Status Code)
      *
-     * @param int $code 状态码
-     * @return string|null 状态消息，不存在则返回null
+     * @param int $code Status code
+     * @return string|null Status message, null if it does not exist
      */
-    public static function getMessageForCode(int $code): ?string
+    public static function getMessageForCode(int $code): string|null
     {
-        return self::tryFrom($code)?->getMessage();
+        return Status::tryFrom($code)?->getMessage();
     }
 }

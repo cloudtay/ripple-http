@@ -24,7 +24,6 @@ use Throwable;
 use function array_merge;
 use function count;
 use function explode;
-use function intval;
 use function is_array;
 use function is_string;
 use function json_decode;

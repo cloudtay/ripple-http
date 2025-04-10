@@ -34,7 +34,6 @@ use function fopen;
 use function fwrite;
 use function hexdec;
 use function implode;
-use function intval;
 use function is_resource;
 use function strlen;
 use function strpos;
@@ -87,7 +86,7 @@ class Connection
     /*** @var mixed|null */
     private mixed $output = null;
 
-    /*** @var \Ripple\Http\Client\Capture|null */
+    /*** @var Capture|null */
     private Capture|null $capture = null;
 
     private WaitGroup $waitGroup;
@@ -129,12 +128,12 @@ class Connection
     }
 
     /**
-     * @param \Psr\Http\Message\RequestInterface $request
+     * @param RequestInterface $request
      * @param array                              $option
      *
-     * @return \GuzzleHttp\Psr7\Response
-     * @throws \Ripple\Stream\Exception\ConnectionException
-     * @throws \Ripple\Stream\Exception\RuntimeException
+     * @return Response
+     * @throws ConnectionException
+     * @throws RuntimeException
      */
     public function request(RequestInterface $request, array $option = []): Response
     {
@@ -149,12 +148,12 @@ class Connection
     }
 
     /**
-     * @param \Psr\Http\Message\RequestInterface $request
+     * @param RequestInterface $request
      * @param array                              $option
      *
-     * @return \GuzzleHttp\Psr7\Response
-     * @throws \Ripple\Stream\Exception\ConnectionException
-     * @throws \Ripple\Stream\Exception\RuntimeException
+     * @return Response
+     * @throws ConnectionException
+     * @throws RuntimeException
      */
     private function queue(RequestInterface $request, array $option = []): Response
     {
@@ -246,8 +245,6 @@ class Connection
                     'Connection closed by peer',
                     ConnectionException::CONNECTION_CLOSED,
                     null,
-                    $this->stream,
-                    true
                 );
             }
 
@@ -302,7 +299,7 @@ class Connection
 
     /**
      * @return ResponseInterface|null
-     * @throws \Ripple\Stream\Exception\RuntimeException
+     * @throws RuntimeException
      */
     public function tickClose(): ResponseInterface|null
     {
@@ -319,8 +316,8 @@ class Connection
     }
 
     /**
-     * @return \Psr\Http\Message\ResponseInterface|null
-     * @throws \Ripple\Stream\Exception\RuntimeException
+     * @return ResponseInterface|null
+     * @throws RuntimeException
      */
     public function process(): ResponseInterface|null
     {

@@ -43,7 +43,7 @@ abstract class Capture
     /**
      * 请求完成
      *
-     * @param \GuzzleHttp\Psr7\Response $response
+     * @param Response $response
      *
      * @return void
      */
