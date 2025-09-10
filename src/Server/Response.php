@@ -17,9 +17,12 @@ use Generator;
 use Ripple\Socket;
 use Ripple\Stream;
 use Ripple\Stream\Exception\ConnectionException;
+use Ripple\WaitGroup;
+use RuntimeException;
 use Throwable;
 
 use function basename;
+use function Co\go;
 use function Co\promise;
 use function filesize;
 use function implode;
@@ -36,7 +39,7 @@ use function strval;
  */
 class Response
 {
-    /*** @var mixed */
+    /*** @var mixed|Stream */
     protected mixed $body;
 
     /*** @var array */
@@ -259,36 +262,34 @@ class Response
         if (is_string($this->body)) {
             $this->stream->write($this->body);
         } elseif ($this->body instanceof Stream) {
-            promise(function (Closure $resolve, Closure $reject) {
-                $this->body->onReadable(function (Stream $body) use ($resolve, $reject) {
+            try {
+                while (!$this->body->eof()) {
+                    $this->body->waitForReadable();
+
                     $content = '';
-                    while ($buffer = $body->read(8192)) {
+                    while ($buffer = $this->body->read(8192)) {
                         $content .= $buffer;
                     }
 
-                    try {
-                        $this->stream->write($content);
-
-                        if ($body->eof()) {
-                            $body->close();
-                            $resolve();
-                        }
-                    } catch (Throwable $exception) {
-                        $body->close();
-                        $reject($exception);
+                    if (!$content) {
+                        throw new RuntimeException('Stream is empty');
                     }
-                });
-            })->await();
+
+                    $this->stream->write($content);
+                }
+            } finally {
+                $this->body->close();
+            }
         } elseif ($this->body instanceof Generator) {
             foreach ($this->body as $content) {
                 $this->stream->write($content);
             }
-            if ($this->body->getReturn() === false) {
-                $this->stream->close();
-            }
+
+            $this->stream->close();
         } else {
             throw new ConnectionException('The response content is illegal.', ConnectionException::ERROR_ILLEGAL_CONTENT);
         }
+
         return $this;
     }
 
