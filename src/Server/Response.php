@@ -268,14 +268,14 @@ class Response
 
                     try {
                         $this->stream->write($content);
+
+                        if ($body->eof()) {
+                            $body->close();
+                            $resolve();
+                        }
                     } catch (Throwable $exception) {
                         $body->close();
                         $reject($exception);
-                    }
-
-                    if ($body->eof()) {
-                        $body->close();
-                        $resolve();
                     }
                 });
             })->await();
