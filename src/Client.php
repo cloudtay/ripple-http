@@ -29,6 +29,7 @@ use function in_array;
 use function parse_url;
 use function str_contains;
 use function strtolower;
+use function is_array;
 
 /**
  *
@@ -68,14 +69,7 @@ class Client
             $port = $scheme === 'https' ? 443 : 80;
         }
 
-        if (!isset($option['proxy'])) {
-            if ($scheme === 'http' && $httpProxy = getenv('http_proxy')) {
-                $option['proxy'] = $httpProxy;
-            } elseif ($scheme === 'https' && $httpsProxy = getenv('https_proxy')) {
-                $option['proxy'] = $httpsProxy;
-            }
-        }
-
+        $proxy = $this->parseProxy($scheme, $option['proxy'] ?? null);
         $capture = $option['capture'] ?? null;
 
         try {
@@ -84,7 +78,7 @@ class Client
                 $port,
                 $scheme === 'https',
                 $option['timeout'] ?? 0,
-                $option['proxy'] ?? null
+                $proxy
             );
         } catch (Throwable $exception) {
             if ($capture instanceof Capture) {
@@ -185,5 +179,30 @@ class Client
     public function getConnectionPool(): ConnectionPool|null
     {
         return $this->connectionPool;
+    }
+
+    /**
+     * @param string $scheme
+     * @param mixed|null $proxy
+     * @return mixed
+     */
+    private function parseProxy(string $scheme, mixed $proxy = null): mixed
+    {
+        if (is_array($proxy)) {
+            return $proxy[$scheme] ?? null;
+        }
+
+        if ($proxy) {
+            return $proxy;
+        }
+
+        if ($scheme === 'http' && $httpProxy = getenv('http_proxy')) {
+            return $httpProxy;
+        }
+        if ($scheme === 'https' && $httpsProxy = getenv('https_proxy')) {
+            return $httpsProxy;
+        }
+
+        return null;
     }
 }
