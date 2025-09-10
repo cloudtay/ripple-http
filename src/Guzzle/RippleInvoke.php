@@ -20,15 +20,17 @@ use Psr\Http\Message\RequestInterface;
 use Ripple\Http\Client;
 use Throwable;
 
+use const PHP_SAPI;
+
 /**
  *
  */
-class RippleHandler
+class RippleInvoke
 {
     /**
-     * @param Client $httpClient
+     * @param bool $enableConnectionPool
      */
-    public function __construct(private readonly Client $httpClient)
+    public function __construct(public readonly bool $enableConnectionPool = PHP_SAPI === 'cli')
     {
     }
 
@@ -40,27 +42,19 @@ class RippleHandler
      */
     public function __invoke(RequestInterface $request, array $options): PromiseInterface
     {
-        $promise = new Promise(function () use ($request, $options, &$promise) {
-            try {
-                $response = $this->httpClient->request($request, $options);
-                $promise->resolve($response);
-            } catch (GuzzleException $exception) {
-                $promise->reject($exception);
-            } catch (Throwable $exception) {
-                $promise->reject(new TransferException($exception->getMessage()));
-            }
-        });
+        $promise = new Promise();
+
+        try {
+            $response = Client::instance([
+                'enable_connection_pool' => $this->enableConnectionPool
+            ])->request($request, $options);
+            $promise->resolve($response);
+        } catch (GuzzleException $exception) {
+            $promise->reject($exception);
+        } catch (Throwable $exception) {
+            $promise->reject(new TransferException($exception->getMessage()));
+        }
 
         return $promise;
-    }
-
-    /**
-     * @Author cclilshy
-     * @Date   2024/8/31 14:31
-     * @return Client
-     */
-    public function getHttpClient(): Client
-    {
-        return $this->httpClient;
     }
 }

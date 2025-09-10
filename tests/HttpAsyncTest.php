@@ -3,7 +3,7 @@
 use GuzzleHttp\Exception\GuzzleException;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use Ripple\Http\Guzzle;
+use Ripple\Http\Guzzle\Client;
 use Ripple\Http\Server\Request;
 use Ripple\Stream\Exception\ConnectionException;
 
@@ -45,7 +45,7 @@ class HttpAsyncTest extends TestCase
         });
         $server->listen();
         $tempFile = \tempnam(\sys_get_temp_dir(), 'download');
-        $client   = Guzzle::newClient();
+        $client   = new Client();
         $client->get($this->testServer, [
             'sink' => $tempFile,
         ]);
@@ -107,9 +107,7 @@ class HttpAsyncTest extends TestCase
         $server->listen();
         $tempFile = \tempnam(\sys_get_temp_dir(), 'slow_bandwidth_test');
 
-        $client = Guzzle::newClient([
-            'timeout' => 0,
-        ]);
+        $client = new Client(['timeout' => 0]);
 
         $response = $client->get($this->testServer, [
             'sink' => $tempFile,

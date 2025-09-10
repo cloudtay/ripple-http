@@ -36,6 +36,11 @@ use function is_array;
  */
 class Client
 {
+    /**
+     * @var Client
+     */
+    private static Client $instance;
+
     /*** @var ConnectionPool|null */
     private ConnectionPool|null $connectionPool = null;
 
@@ -43,13 +48,26 @@ class Client
     private bool $pool;
 
     /*** @param array $config */
-    public function __construct(private readonly array $config = [])
+    private function __construct(private readonly array $config = [])
     {
-        $pool       = $this->config['pool'] ?? 'off';
+        $pool       = $this->config['enable_connection_pool'] ?? false;
         $this->pool = in_array($pool, [true, 1, 'on'], true);
         if ($this->pool) {
             $this->connectionPool = new ConnectionPool();
         }
+    }
+
+    /**
+     * @param array $config
+     * @return Client
+     */
+    public static function instance(array $config = []): Client
+    {
+        if (!isset(self::$instance)) {
+            self::$instance = new Client($config);
+        }
+
+        return self::$instance;
     }
 
     /**

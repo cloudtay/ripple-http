@@ -4,11 +4,12 @@
 use GuzzleHttp\Exception\GuzzleException;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use Ripple\Http\Guzzle;
+use Ripple\Http\Client;
 use Ripple\Http\Server\Request;
 use Ripple\Promise;
 use Ripple\Utils\Output;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Ripple\Http\Guzzle\Client as GuzzleClient;
 
 use function Co\async;
 use function Co\cancelAll;
@@ -123,10 +124,7 @@ class HttpTest extends TestCase
             }
         }
 
-        Guzzle::getInstance()
-            ->getHttpClient()
-            ->getConnectionPool()
-            ->clearConnectionPool();
+        Client::instance()->getConnectionPool()->clearConnectionPool();
         \gc_collect_cycles();
 
         if ($baseMemory !== \memory_get_usage()) {
@@ -144,7 +142,7 @@ class HttpTest extends TestCase
     private function httpGet(): void
     {
         $hash     = \md5(\uniqid());
-        $client   = Guzzle::newClient();
+        $client   = new GuzzleClient();
         $response = $client->get('http://127.0.0.1:8008/', [
             'query' => [
                 'query' => $hash,
@@ -162,7 +160,7 @@ class HttpTest extends TestCase
     private function httpPost(): void
     {
         $hash     = \md5(\uniqid());
-        $client   = Guzzle::newClient();
+        $client   = new GuzzleClient();
         $response = $client->post('http://127.0.0.1:8008/', [
             'json'    => [
                 'query' => $hash,
@@ -179,7 +177,7 @@ class HttpTest extends TestCase
      */
     private function httpFile(): void
     {
-        $client = Guzzle::newClient();
+        $client = new GuzzleClient();
         $path   = \tempnam(\sys_get_temp_dir(), 'test');
         \file_put_contents($path, \str_repeat('a', 81920));
         $hash = \md5_file($path);
@@ -211,7 +209,7 @@ class HttpTest extends TestCase
     {
         $largeData = \str_repeat('a', 1024 * 1024); // 1MB of data
         $hash      = \md5($largeData);
-        $client    = Guzzle::newClient();
+        $client    = new GuzzleClient();
         $response  = $client->post('http://127.0.0.1:8008/', [
             'json'    => [
                 'query' => $largeData
@@ -254,7 +252,7 @@ class HttpTest extends TestCase
         foreach ($urls as $url) {
             $list[] = async(function () use ($url) {
                 try {
-                    return [$url, Guzzle::newClient()->get($url, ['timeout' => 10])];
+                    return [$url, (new GuzzleClient())->get($url, ['timeout' => 10])];
                 } catch (Throwable $exception) {
                     return [$url, $exception];
                 }
